@@ -15,84 +15,99 @@ export class TrainingUI {
     // Create panel
     this.panel = document.createElement('div');
     this.panel.id = 'training-panel';
-    this.panel.classList.add('training-panel');
-
+    this.panel.style.cssText = `
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.85);
+      color: #00ff88;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      padding: 15px;
+      border: 2px solid #00ff88;
+      border-radius: 5px;
+      min-width: 320px;
+      width: 320px;
+      max-height: 80vh;
+      overflow-y: auto;
+      overflow-x: hidden;
+      display: none;
+      z-index: 1000;
+      box-sizing: border-box;
+    `;
+    
     // Header
     const header = document.createElement('div');
-    header.classList.add('training-panel-header');
-    const title = document.createElement('h3');
-    title.classList.add('training-panel-title');
-    title.textContent = '🧠 Training Control';
-    header.appendChild(title);
+    header.innerHTML = '<h3 style="margin:0 0 10px 0; color:#00ffff;">🧠 Training Control</h3>';
     this.panel.appendChild(header);
-
+    
     // Mode selection
     const modeSection = this.createSection('Mode');
-    modeSection.insertAdjacentHTML('beforeend', `
-      <label class="training-panel-label">
+    modeSection.innerHTML += `
+      <label style="display: block; margin: 5px 0;">
         <input type="radio" name="mode" value="play" checked> Play Mode (Heuristic AI)
       </label>
-      <label class="training-panel-label">
+      <label style="display: block; margin: 5px 0;">
         <input type="radio" name="mode" value="train"> Training Mode (Learn Policy)
       </label>
-    `);
+    `;
     this.panel.appendChild(modeSection);
-
+    
     // Training controls
     const trainingSection = this.createSection('Training');
-    trainingSection.insertAdjacentHTML('beforeend', `
-      <div class="training-panel-field">
-        <label class="training-panel-label" for="num-generations">Generations:</label>
-        <input type="number" id="num-generations" value="10" min="1" max="100"
-               class="training-panel-input">
+    trainingSection.innerHTML += `
+      <div style="margin: 10px 0;">
+        <label style="display: block; margin-bottom: 5px;">Generations:</label>
+        <input type="number" id="num-generations" value="10" min="1" max="100" 
+               style="width: 100%; box-sizing: border-box; padding: 5px;">
       </div>
-      <button id="start-training" class="training-panel-button">▶️ Start Training</button>
-      <button id="stop-training" class="training-panel-button" disabled>⏸️ Stop</button>
-      <button id="reset-learner" class="training-panel-button">🔄 Reset Learner</button>
-    `);
+      <button id="start-training" style="margin: 5px 0;">▶️ Start Training</button>
+      <button id="stop-training" style="margin: 5px 0;" disabled>⏸️ Stop</button>
+      <button id="reset-learner" style="margin: 5px 0;">🔄 Reset Learner</button>
+    `;
     this.panel.appendChild(trainingSection);
-
+    
     // Stats display
     const statsSection = this.createSection('Statistics');
-    statsSection.insertAdjacentHTML('beforeend', `
-      <div id="training-stats" class="training-panel-stats">
-        <div>Generation: <span id="stat-generation" class="status-chip">0</span></div>
-        <div>Policy: <span id="stat-policy" class="status-chip">-</span></div>
-        <div>Best Reward: <span id="stat-best" class="status-chip">-</span></div>
-        <div>Mean Reward: <span id="stat-mean" class="status-chip">-</span></div>
-        <div>Status: <span id="stat-status" class="status-chip">Idle</span></div>
+    statsSection.innerHTML += `
+      <div id="training-stats" style="margin: 10px 0; font-size: 11px;">
+        <div>Generation: <span id="stat-generation">0</span></div>
+        <div>Policy: <span id="stat-policy">-</span></div>
+        <div>Best Reward: <span id="stat-best">-</span></div>
+        <div>Mean Reward: <span id="stat-mean">-</span></div>
+        <div>Status: <span id="stat-status">Idle</span></div>
       </div>
-    `);
+    `;
     this.panel.appendChild(statsSection);
-
+    
     // Policy management
     const policySection = this.createSection('Policy');
-    policySection.insertAdjacentHTML('beforeend', `
-      <button id="save-policy" class="training-panel-button">💾 Save Best Policy</button>
-      <button id="load-policy" class="training-panel-button">📂 Load Policy</button>
-      <div id="loaded-policy-info" class="loaded-policy-info is-hidden">
-        <div class="loaded-policy-info-title">📁 Loaded Policy:</div>
-        <div id="policy-filename">None</div>
-        <div id="policy-details" class="loaded-policy-info-details">Generation: - | Reward: -</div>
+    policySection.innerHTML += `
+      <button id="save-policy" style="margin: 5px 0;">💾 Save Best Policy</button>
+      <button id="load-policy" style="margin: 5px 0;">📂 Load Policy</button>
+      <div id="loaded-policy-info" style="margin: 10px 0; padding: 8px; background: rgba(255,255,0,0.1); border: 1px solid #ffff00; display: none; font-size: 10px;">
+        <div style="font-weight: bold; color: #ffff00; margin-bottom: 4px;">📁 Loaded Policy:</div>
+        <div id="policy-filename" style="color: #fff; margin-bottom: 4px;">None</div>
+        <div id="policy-details" style="color: #aaa; font-size: 9px;">Generation: - | Reward: -</div>
       </div>
-      <button id="use-policy" class="training-panel-button is-hidden">✅ Use This Policy</button>
-      <button id="test-policy" class="training-panel-button">🎮 Test Best Policy</button>
-    `);
+      <button id="use-policy" style="margin: 5px 0; display: none;">✅ Use This Policy</button>
+      <button id="test-policy" style="margin: 5px 0;">🎮 Test Best Policy</button>
+    `;
     this.panel.appendChild(policySection);
-
+    
     // Chart placeholder
     const chartSection = this.createSection('Learning Curve');
-    chartSection.insertAdjacentHTML('beforeend', `
-      <canvas id="learning-chart" width="100" height="120" class="training-panel-chart"></canvas>
-    `);
+    chartSection.innerHTML += `
+      <canvas id="learning-chart" width="100" height="120" style="background: #111; border: 1px solid #333; display: block; max-width: 100%;"></canvas>
+    `;
     this.panel.appendChild(chartSection);
-
+    
     // Keyboard shortcut hint
     const hint = document.createElement('div');
-    hint.classList.add('training-panel-hint');
+    hint.style.cssText = 'margin-top: 15px; font-size: 10px; color: #666; border-top: 1px solid #333; padding-top: 10px;';
     hint.innerHTML = 'Press [L] to toggle this panel';
     this.panel.appendChild(hint);
-
+    
     this.container.appendChild(this.panel);
     
     // Attach event listeners
@@ -101,8 +116,8 @@ export class TrainingUI {
   
   createSection(title) {
     const section = document.createElement('div');
-    section.classList.add('training-panel-section');
-    section.innerHTML = `<div class="training-panel-section-title">${title}</div>`;
+    section.style.cssText = 'margin: 15px 0; padding: 10px; background: rgba(0,255,136,0.05); border-left: 3px solid #00ff88; box-sizing: border-box; overflow: hidden;';
+    section.innerHTML = `<div style="font-weight: bold; margin-bottom: 8px; color: #00ffff;">${title}</div>`;
     return section;
   }
   
@@ -171,17 +186,17 @@ export class TrainingUI {
   // Toggle visibility
   toggle() {
     this.isVisible = !this.isVisible;
-    this.panel.classList.toggle('is-visible', this.isVisible);
+    this.panel.style.display = this.isVisible ? 'block' : 'none';
   }
-
+  
   show() {
     this.isVisible = true;
-    this.panel.classList.add('is-visible');
+    this.panel.style.display = 'block';
   }
-
+  
   hide() {
     this.isVisible = false;
-    this.panel.classList.remove('is-visible');
+    this.panel.style.display = 'none';
   }
   
   // Update statistics
@@ -204,20 +219,20 @@ export class TrainingUI {
     const useButton = document.getElementById('use-policy');
     
     if (infoDiv && filenameDiv && detailsDiv && useButton) {
-      infoDiv.classList.remove('is-hidden');
+      infoDiv.style.display = 'block';
       filenameDiv.textContent = filename;
       detailsDiv.textContent = `Generation: ${generation} | Best Reward: ${bestReward ? bestReward.toFixed(2) : 'N/A'}`;
-      useButton.classList.remove('is-hidden');
+      useButton.style.display = 'block';
     }
   }
-
+  
   // Hide loaded policy info
   hideLoadedPolicyInfo() {
     const infoDiv = document.getElementById('loaded-policy-info');
     const useButton = document.getElementById('use-policy');
-
-    if (infoDiv) infoDiv.classList.add('is-hidden');
-    if (useButton) useButton.classList.add('is-hidden');
+    
+    if (infoDiv) infoDiv.style.display = 'none';
+    if (useButton) useButton.style.display = 'none';
   }
   
   // Draw learning curve
@@ -290,3 +305,33 @@ export class TrainingUI {
     this.callbacks[event] = callback;
   }
 }
+
+// Style button helper
+function styleButton(btn) {
+  btn.style.cssText = `
+    background: #00ff88;
+    color: #000;
+    border: none;
+    padding: 8px 15px;
+    cursor: pointer;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    width: 100%;
+    font-weight: bold;
+  `;
+  
+  btn.onmouseenter = () => {
+    btn.style.background = '#00ffff';
+  };
+  
+  btn.onmouseleave = () => {
+    btn.style.background = '#00ff88';
+  };
+}
+
+// Apply button styles
+setTimeout(() => {
+  document.querySelectorAll('#training-panel button').forEach(styleButton);
+}, 0);
+
