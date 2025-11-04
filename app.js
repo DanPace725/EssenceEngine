@@ -1459,7 +1459,7 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
           }
           
           // Seed dispersal (resources spawn near existing ones)
-          const seedLocation = attemptSeedDispersal(World.resources, FertilityField, globalTick);
+          const seedLocation = attemptSeedDispersal(World.resources, FertilityField, globalTick, dt);
           if (seedLocation && World.resources.length < maxResources) {
             const newResource = new Resource(seedLocation.x, seedLocation.y, CONFIG.resourceRadius);
             World.resources.push(newResource);
@@ -1467,7 +1467,7 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
           }
           
           // Spontaneous growth (resources appear in fertile soil)
-          const growthLocation = attemptSpontaneousGrowth(FertilityField);
+          const growthLocation = attemptSpontaneousGrowth(FertilityField, dt);
           if (growthLocation && World.resources.length < maxResources) {
             const newResource = new Resource(growthLocation.x, growthLocation.y, CONFIG.resourceRadius);
             World.resources.push(newResource);

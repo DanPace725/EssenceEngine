@@ -252,15 +252,16 @@ export class FertilityGrid {
 /**
  * Seed dispersal - resources can spawn near existing ones
  */
-export function attemptSeedDispersal(resources, fertilityGrid, globalTick) {
+export function attemptSeedDispersal(resources, fertilityGrid, globalTick, dt) {
   const config = CONFIG.plantEcology;
   if (!config.enabled || resources.length === 0) return null;
-  
+
   // Random resource tries to spawn seed
   const parent = resources[Math.floor(Math.random() * resources.length)];
-  
+
   // Check spawn chance
-  if (Math.random() > config.seedChance) return null;
+  const seedChance = Math.min(1, config.seedChance * dt);
+  if (Math.random() > seedChance) return null;
   
   // Find location near parent
   const angle = Math.random() * Math.PI * 2;
@@ -290,12 +291,13 @@ export function attemptSeedDispersal(resources, fertilityGrid, globalTick) {
 /**
  * Spontaneous growth - resources can appear in fertile soil
  */
-export function attemptSpontaneousGrowth(fertilityGrid) {
+export function attemptSpontaneousGrowth(fertilityGrid, dt) {
   const config = CONFIG.plantEcology;
   if (!config.enabled) return null;
-  
+
   // Check growth chance
-  if (Math.random() > config.growthChance) return null;
+  const growthChance = Math.min(1, config.growthChance * dt);
+  if (Math.random() > growthChance) return null;
   
   // Find fertile location
   const location = fertilityGrid.findFertileSpawnLocation();
