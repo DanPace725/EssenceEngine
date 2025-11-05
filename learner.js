@@ -15,7 +15,7 @@ import { LinearPolicyController } from './controllers.js';
  * 5. Repeat
  */
 export class CEMLearner {
-  constructor(observationDims = 15, actionDims = 3) {
+  constructor(observationDims = 23, actionDims = 3) {
     this.obsDims = observationDims;
     this.actionDims = actionDims;
     this.weightDims = (observationDims * actionDims) + actionDims; // W + b
