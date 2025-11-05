@@ -323,7 +323,7 @@ export function attemptSpontaneousGrowth(fertilityGrid, dt, aliveCount = 0) {
 
   // Check growth chance
   const spawnPressure = resolveSpawnPressureConfig();
-  const minGrowthMultiplier = spawnPressure?.minGrowthMultiplier ?? spawnPressure?.minResourceMultiplier ?? 1;
+  const minGrowthMultiplier = spawnPressure?.minGrowthMultiplier ?? spawnPressure?.minSeedMultiplier ?? 1;
   const growthMultiplier = getSpawnPressureMultiplier(aliveCount, minGrowthMultiplier);
   const growthChance = Math.min(1, config.growthChance * growthMultiplier * dt);
   if (Math.random() > growthChance) return null;

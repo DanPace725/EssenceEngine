@@ -180,7 +180,7 @@ export const CONFIG = {
   mitosis: {
     enabled: true,                    // Enable mitosis system
     enabledDuringTraining: false,     // Disable during training (keep population fixed)
-    threshold: 400,                    // Minimum χ required to reproduce
+    threshold: 400,                   // Minimum χ required to reproduce
     cost: 15,                         // χ spent by parent on reproduction
     childStartChi: 12,                // Child's starting χ
     cooldown: 300,                    // Ticks between mitosis attempts (5 seconds at 60fps)

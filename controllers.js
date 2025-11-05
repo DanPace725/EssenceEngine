@@ -86,7 +86,7 @@ export class HeuristicController extends Controller {
 // ========== Linear Policy Controller ==========
 // Simple learned policy: linear layer + activations
 export class LinearPolicyController extends Controller {
-  constructor(weights = null, observationDims = 23) {
+  constructor(weights = null, observationDims = 15) {
     super();
     this.obsDims = observationDims;
     this.actionDims = 3; // turn, thrust, senseFrac
