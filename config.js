@@ -115,7 +115,6 @@ export const CONFIG = {
   // === Sensing (smooth + delta-paid) ===
   aiSensoryRangeBase: 175,            // Reduced from 220 (tighter base vision)
   aiSensoryRangeMax: 360,             // Reduced from 560 (less popping)
-  aiSenseCostPerSecond: 1.0,
   aiSenseRangePerChi: 35,             // Reduced from 55 (83% more expensive!)
   aiSenseBiasFromFrustr: 0.8,
   aiSenseSlewPerSec: 380,
@@ -201,7 +200,7 @@ export const CONFIG = {
     headingNoise: 0.8,                // Radians of noise added to inherited heading
 
     // Discrete budding reproduction when χ is very high
-    buddingThreshold: 100,            // χ required to trigger budding split
+    buddingThreshold: 150,            // χ required to trigger budding split
     buddingShare: 0.5,                // Fraction of parent's χ transferred to budded child
     buddingOffset: 20,                // Random jitter radius for budding spawn (pixels)
     buddingRespectCooldown: true,     // Reuse cooldown before another budding/mitosis event
