@@ -43,7 +43,7 @@ export const CONFIG = {
     
     // Growth mechanics
     seedChance: 0.01,               // Chance per second for resource to spawn seed
-    seedDistance: 150,              // Max distance for seed dispersal (pixels)
+    seedDistance: 100,              // Max distance for seed dispersal (pixels)
     growthFertilityThreshold: 0.3,  // Min fertility needed for growth
     growthChance: 0.1,             // Chance per second to grow in fertile soil
     
@@ -80,7 +80,7 @@ export const CONFIG = {
     enabled: true,                 // Toggle adaptive vs fixed reward
     gainFactor: 5.0,               // "Ecosystem generosity" (4-10 range recommended)
     avgMoveFraction: 0.7,          // Assume 70% of time spent moving
-    emaAlpha: 0.2,                 // EMA smoothing (0.05-0.2, lower = more stable)
+    emaAlpha: 0.1,                 // EMA smoothing (0.05-0.2, lower = more stable)
     minReward: 3.0,                // Safety floor (prevent tiny rewards)
     maxReward: 100.0,              // Safety ceiling (prevent explosion)
     
@@ -113,10 +113,10 @@ export const CONFIG = {
   autoMove: true,                     // Start in auto mode (no manual control)
 
   // === Sensing (smooth + delta-paid) ===
-  aiSensoryRangeBase: 150,            // Reduced from 220 (tighter base vision)
+  aiSensoryRangeBase: 175,            // Reduced from 220 (tighter base vision)
   aiSensoryRangeMax: 360,             // Reduced from 560 (less popping)
   aiSenseCostPerSecond: 1.0,
-  aiSenseRangePerChi: 40,             // Reduced from 55 (83% more expensive!)
+  aiSenseRangePerChi: 35,             // Reduced from 55 (83% more expensive!)
   aiSenseBiasFromFrustr: 0.8,
   aiSenseSlewPerSec: 380,
 
@@ -190,8 +190,8 @@ export const CONFIG = {
   mitosis: {
     enabled: true,                    // Enable mitosis system
     enabledDuringTraining: false,     // Disable during training (keep population fixed)
-    threshold: 50,                   // Minimum χ required to reproduce
-    cost: 25,                         // χ spent by parent on reproduction
+    threshold: 100,                   // Minimum χ required to reproduce
+    cost: 50,                         // χ spent by parent on reproduction
     childStartChi: 12,                // Child's starting χ
     cooldown: 150,                    // Ticks between mitosis attempts (5 seconds at 60fps)
     maxAgents: 50,                    // Hard population cap
@@ -201,7 +201,7 @@ export const CONFIG = {
     headingNoise: 0.8,                // Radians of noise added to inherited heading
 
     // Discrete budding reproduction when χ is very high
-    buddingThreshold: 50,            // χ required to trigger budding split
+    buddingThreshold: 100,            // χ required to trigger budding split
     buddingShare: 0.5,                // Fraction of parent's χ transferred to budded child
     buddingOffset: 20,                // Random jitter radius for budding spawn (pixels)
     buddingRespectCooldown: true,     // Reuse cooldown before another budding/mitosis event
@@ -211,7 +211,7 @@ export const CONFIG = {
     carryingCapacityMultiplier: 1.5,  // Allow population = resources × multiplier
     
     // Lineage visualization
-    showLineage: true,                // Draw lines connecting parent to child
+    showLineage: false,                // Draw lines connecting parent to child
     lineageMaxDistance: 5000,          // Max distance to draw lineage link (pixels)
     lineageFadeDuration: 10000,         // Ticks until lineage link fades (10 seconds at 60fps)
     lineageOpacity: 1,              // Base opacity of lineage lines (0-1)
@@ -232,7 +232,7 @@ export const CONFIG = {
   // === HUD ===
   hud: { 
     show: true,
-    showActions: false  // Show action values (turn/thrust/senseFrac) for debugging
+    showActions: true // Show action values (turn/thrust/senseFrac) for debugging
   },
 
   // === Learning System ===
