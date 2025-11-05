@@ -1642,27 +1642,46 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
         renderAgentRow(ctx, bundle, index, options);
       });
 
-      // Population summary (if more than maxDisplay agents)
-      if (hasOverflow) {
-        ctx.fillStyle = "#88ffff";
-        const aliveCount = World.bundles.filter(b => b.alive).length;
-        const totalChi = World.bundles.reduce((sum, b) => sum + b.chi, 0);
-        const avgChi = totalChi / World.bundles.length;
-        const summaryY = options.baseBarY + maxDisplay * options.rowSpacing;
-        ctx.fillText(`📊 Population: ${aliveCount}/${World.bundles.length} alive | Avg χ: ${avgChi.toFixed(1)} | Births: ${World.totalBirths}`, 10, summaryY);
-      }
+      const lineHeight = 14;
+      const sectionSpacing = 6;
+      const writeHudLines = (section, startY) => {
+        const lines = section.lines.filter(Boolean);
+        if (!lines.length) return startY;
+        let y = startY;
+        ctx.fillStyle = section.color;
+        lines.forEach(line => {
+          ctx.fillText(line, 10, y);
+          y += lineHeight;
+        });
+        return y + sectionSpacing;
+      };
 
-      // General info
-      ctx.fillStyle = "#00ff88";
       const mode = CONFIG.autoMove ? "AUTO" : "MANUAL";
       const diffState = CONFIG.enableDiffusion ? "ON" : "OFF";
       const learningModeDisplay = learningMode === 'train' ? "TRAINING" : "PLAY";
       const mitosisStatus = CONFIG.mitosis.enabled ? "ON" : "OFF";
-      
-      // Resource ecology info
-      let resourceInfo = `resources: ${World.resources.length}`;
+      const scentStatus = showScentGradient ? "ON" : "OFF";
+      const fertilityStatus = showFertility ? "ON" : "OFF";
+
+      const hudSections = [];
+
+      if (hasOverflow) {
+        const aliveCount = World.bundles.filter(b => b.alive).length;
+        const totalChi = World.bundles.reduce((sum, b) => sum + b.chi, 0);
+        const avgChi = World.bundles.length ? totalChi / World.bundles.length : 0;
+        hudSections.push({
+          label: "population",
+          color: "#88ffff",
+          lines: [
+            `📊 population ${aliveCount}/${World.bundles.length}`,
+            `${"avg χ".padEnd(10)}${avgChi.toFixed(1)}   ${"births".padEnd(10)}${World.totalBirths}`
+          ]
+        });
+      }
+
+      let resourceSummary = `${World.resources.length}`;
+      let resourceDetails = "";
       if (CONFIG.plantEcology.enabled) {
-        // Plant ecology: show resource count with dynamic limit if enabled
         if (CONFIG.resourceScaleWithAgents) {
           const aliveCount = World.bundles.filter(b => b.alive).length;
           const spawnPressure = CONFIG.plantEcology.spawnPressure;
@@ -1676,43 +1695,62 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
             )
           );
           const pressurePct = Math.round((1 - pressureMultiplier) * 100);
-          resourceInfo = `🌿 resources: ${World.resources.length}/${maxResources} (${aliveCount} agents | pressure ${pressurePct}%)`;
+          resourceSummary = `${World.resources.length}/${maxResources}`;
+          resourceDetails = `agents ${aliveCount} | pressure ${pressurePct}%`;
         } else {
-          resourceInfo = `🌿 resources: ${World.resources.length} | plants: ${World.carryingCapacity}`;
+          resourceSummary = `${World.resources.length}/${World.carryingCapacity}`;
+          resourceDetails = `plants ${World.carryingCapacity}`;
         }
       } else if (CONFIG.resourceDynamicCount) {
-        // Legacy system: show pressure
-        resourceInfo = `🌿 resources: ${World.resources.length}/${World.carryingCapacity} (pressure: ${(World.resourcePressure * 100).toFixed(0)}%)`;
+        resourceSummary = `${World.resources.length}/${World.carryingCapacity}`;
+        resourceDetails = `pressure ${(World.resourcePressure * 100).toFixed(0)}%`;
       }
-      
-      const yOffset = hasOverflow ? 110 : 94;
-      ctx.fillText(`${mode} | ${learningModeDisplay} | collected: ${World.collected} | ${resourceInfo} | tick: ${globalTick} | diffusion: ${diffState} | mitosis: ${mitosisStatus}`, 10, yOffset);
 
-      // Adaptive Reward Stats (if enabled)
-      const scentStatus = showScentGradient ? "ON" : "OFF";
-      const fertilityStatus = showFertility ? "ON" : "OFF";
-      let controlsY1, controlsY2, controlsY3;
+      const generalLines = [
+        `${"mode".padEnd(10)}${mode.padEnd(8)}${"learning".padEnd(10)}${learningModeDisplay.padEnd(9)}`,
+        `${"tick".padEnd(10)}${globalTick.toString().padEnd(8)}${"χ earned".padEnd(10)}${World.collected.toString().padEnd(8)}`,
+        `${"diffusion".padEnd(10)}${diffState.padEnd(4)}${"mitosis".padEnd(10)}${mitosisStatus.padEnd(4)}`
+      ];
+      const resourceLabel = "🌿 resources";
+      generalLines.push(`${resourceLabel.padEnd(12)}${resourceSummary}`);
+      if (resourceDetails) {
+        generalLines.push(`${"".padEnd(12)}${resourceDetails}`);
+      }
+
+      hudSections.push({
+        label: "general stats",
+        color: "#00ff88",
+        lines: generalLines
+      });
 
       if (CONFIG.adaptiveReward?.enabled) {
-        ctx.fillStyle = "#ffaa00";
         const nextReward = calculateAdaptiveReward(World.avgFindTime);
-        const adaptiveY = hasOverflow ? 126 : 110;
-        ctx.fillText(
-          `Adaptive Reward: avgFind=${World.avgFindTime.toFixed(2)}s | nextReward≈${nextReward.toFixed(1)}χ | avgGiven=${World.rewardStats.avgRewardGiven.toFixed(1)}χ`,
-          10, adaptiveY
-        );
-        ctx.fillStyle = "#00ff88";
-        controlsY1 = hasOverflow ? 142 : 126;
-        controlsY2 = hasOverflow ? 158 : 142;
-        controlsY3 = hasOverflow ? 174 : 158;
-        ctx.fillText(`[WASD]=move [A]=auto [S]=extSense [G]=scent(${scentStatus}) [P]=fertility(${fertilityStatus}) [M]=mitosis(${mitosisStatus}) [Space]=pause [R]=reset [C]=+5χ`, 10, controlsY1);
-        ctx.fillText(`[T]=trail [X]=clear [F]=diffuse [L]=train | [1-4]=toggle agent [V]=toggle all`, 10, controlsY2);
-      } else {
-        controlsY1 = hasOverflow ? 126 : 110;
-        controlsY2 = hasOverflow ? 142 : 126;
-        ctx.fillText(`[WASD]=move [A]=auto [S]=extSense [G]=scent(${scentStatus}) [P]=fertility(${fertilityStatus}) [M]=mitosis(${mitosisStatus}) [Space]=pause [R]=reset [C]=+5χ`, 10, controlsY1);
-        ctx.fillText(`[T]=trail [X]=clear [F]=diffuse [L]=train | [1-4]=toggle agent [V]=toggle all`, 10, controlsY2);
+        hudSections.push({
+          label: "adaptive reward",
+          color: "#ffaa00",
+          lines: [
+            `${"avg find".padEnd(10)}${World.avgFindTime.toFixed(2)}s`,
+            `${"next χ".padEnd(10)}≈${nextReward.toFixed(1)}   ${"avg given".padEnd(10)}${World.rewardStats.avgRewardGiven.toFixed(1)}χ`
+          ]
+        });
       }
+
+      const controlsLines = [
+        `[WASD] move   [Space] pause   [R] reset   [C] +5χ`,
+        `[A] auto   [S] extSense   [G] scent(${scentStatus})   [P] fertility(${fertilityStatus})`,
+        `[M] mitosis(${mitosisStatus})   [T] trail   [X] clear   [F] diffuse   [L] train`,
+        `[1-4] agent vis   [V] toggle all`
+      ];
+      hudSections.push({
+        label: "controls",
+        color: "#00ff88",
+        lines: controlsLines
+      });
+
+      let currentY = hasOverflow ? 110 : 94;
+      hudSections.forEach(section => {
+        currentY = writeHudLines(section, currentY);
+      });
       ctx.restore();
     }
   
