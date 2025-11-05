@@ -19,6 +19,7 @@ export const CONFIG = {
   resourceStableMax: 4,             // Stable maximum after depletion
   resourceDepletionRate: 0.015,     // Rate of decline per collection (carrying capacity pressure)
   resourceRecoveryChance: 0.10,     // Chance per second to add a resource (if below stable max)
+  resourceRespawnCooldown: 400,     // Ticks (3 seconds at 60fps) before resource can respawn after collection
   // Legacy fixed count (used when resourceDynamicCount = false)
   resourceCount: 3,                 // Fixed number of resources (legacy mode)
   

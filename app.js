@@ -1027,9 +1027,14 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
         this.y = y; 
         this.r = r; 
         this.age = 0; // Ticks since spawn (for visualization)
+        this.cooldownEnd = -1; // Tick when cooldown expires (-1 = not on cooldown)
+        this.visible = true; // Whether resource is visible/collectable
       }
       
       draw(ctx) {
+        // Don't draw if on cooldown (invisible)
+        if (!this.visible) return;
+        
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.r, 0, Math.PI*2);
         
@@ -1091,10 +1096,35 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
         }
         
         this.age = 0;
+        this.visible = true;
+        this.cooldownEnd = -1;
+      }
+      
+      /**
+       * Start cooldown after collection
+       */
+      startCooldown() {
+        this.cooldownEnd = globalTick + CONFIG.resourceRespawnCooldown;
+        this.visible = false; // Hide resource during cooldown
+      }
+      
+      /**
+       * Check if cooldown has expired and respawn if ready
+       */
+      updateCooldown() {
+        if (this.cooldownEnd > 0 && globalTick >= this.cooldownEnd) {
+          // Cooldown expired, respawn
+          this.respawn();
+          // Update Z position to terrain height if terrain enabled
+          if (typeof getTerrainHeight === 'function') {
+            this.z = getTerrainHeight(this.x, this.y);
+          }
+        }
       }
       
       update(dt) {
         this.age++;
+        this.updateCooldown();
       }
     }
   
@@ -1191,18 +1221,19 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
         this.lastFindTimestamp = performance.now() / 1000;
       },
       
-      // Helper function to get nearest resource to a bundle
+      // Helper function to get nearest resource to a bundle (only visible resources)
       getNearestResource(bundle) {
-        if (this.resources.length === 0) return null;
+        const visibleResources = this.resources.filter(res => res.visible);
+        if (visibleResources.length === 0) return null;
         
-        let nearest = this.resources[0];
+        let nearest = visibleResources[0];
         let minDist = Math.hypot(bundle.x - nearest.x, bundle.y - nearest.y);
         
-        for (let i = 1; i < this.resources.length; i++) {
-          const dist = Math.hypot(bundle.x - this.resources[i].x, bundle.y - this.resources[i].y);
+        for (let i = 1; i < visibleResources.length; i++) {
+          const dist = Math.hypot(bundle.x - visibleResources[i].x, bundle.y - visibleResources[i].y);
           if (dist < minDist) {
             minDist = dist;
-            nearest = this.resources[i];
+            nearest = visibleResources[i];
           }
         }
         
@@ -1292,60 +1323,68 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
 
       // Agent 1
       const b1 = World.bundles[0];
-      ctx.fillStyle = "#00ffff";
-      let controller1 = b1.useController && b1.controller 
-        ? (loadedPolicyInfo ? `🤖 ${loadedPolicyInfo.filename.replace('.json', '').substring(0, 12)}` 
-                            : (b1.controller.constructor.name === "LinearPolicyController" ? "🤖 POLICY" : "🎮 CTRL"))
-        : "🧠 AI";
-      const vis1 = b1.visible ? "👁" : "🚫";
-      ctx.fillText(
-        `${vis1} A1[1]: χ${b1.chi.toFixed(1)} ${b1.alive ? "✓" : "✗"} sense:${Math.round(b1.currentSensoryRange)} ${controller1} cr:${Ledger.getCredits(1).toFixed(1)}`,
-        10, 18
-      );
-      bar(10, 22, 60, 4, b1.frustration, "#ff5555");
-      bar(73, 22, 60, 4, b1.hunger, "#ff8800");
+      if (b1) {
+        ctx.fillStyle = "#00ffff";
+        let controller1 = b1.useController && b1.controller 
+          ? (loadedPolicyInfo ? `🤖 ${loadedPolicyInfo.filename.replace('.json', '').substring(0, 12)}` 
+                              : (b1.controller.constructor.name === "LinearPolicyController" ? "🤖 POLICY" : "🎮 CTRL"))
+          : "🧠 AI";
+        const vis1 = b1.visible ? "👁" : "🚫";
+        ctx.fillText(
+          `${vis1} A1[1]: χ${b1.chi.toFixed(1)} ${b1.alive ? "✓" : "✗"} sense:${Math.round(b1.currentSensoryRange)} ${controller1} cr:${Ledger.getCredits(1).toFixed(1)}`,
+          10, 18
+        );
+        bar(10, 22, 60, 4, b1.frustration, "#ff5555");
+        bar(73, 22, 60, 4, b1.hunger, "#ff8800");
+      }
 
       // Agent 2
       const b2 = World.bundles[1];
-      ctx.fillStyle = "#ff00ff";
-      const controller2 = b2.useController && b2.controller 
-        ? (b2.controller.constructor.name === "LinearPolicyController" ? "🤖 POLICY" : "🎮 CTRL")
-        : "🧠 AI";
-      const vis2 = b2.visible ? "👁" : "🚫";
-      ctx.fillText(
-        `${vis2} A2[2]: χ${b2.chi.toFixed(1)} ${b2.alive ? "✓" : "✗"} sense:${Math.round(b2.currentSensoryRange)} ${controller2} cr:${Ledger.getCredits(2).toFixed(1)}`,
-        10, 36
-      );
-      bar(10, 40, 60, 4, b2.frustration, "#ff55ff");
-      bar(73, 40, 60, 4, b2.hunger, "#ff8800");
+      if (b2) {
+        ctx.fillStyle = "#ff00ff";
+        const controller2 = b2.useController && b2.controller 
+          ? (b2.controller.constructor.name === "LinearPolicyController" ? "🤖 POLICY" : "🎮 CTRL")
+          : "🧠 AI";
+        const vis2 = b2.visible ? "👁" : "🚫";
+        ctx.fillText(
+          `${vis2} A2[2]: χ${b2.chi.toFixed(1)} ${b2.alive ? "✓" : "✗"} sense:${Math.round(b2.currentSensoryRange)} ${controller2} cr:${Ledger.getCredits(2).toFixed(1)}`,
+          10, 36
+        );
+        bar(10, 40, 60, 4, b2.frustration, "#ff55ff");
+        bar(73, 40, 60, 4, b2.hunger, "#ff8800");
+      }
 
       // Agent 3
       const b3 = World.bundles[2];
-      ctx.fillStyle = "#ffff00";
-      const controller3 = b3.useController && b3.controller 
-        ? (b3.controller.constructor.name === "LinearPolicyController" ? "🤖 POLICY" : "🎮 CTRL")
-        : "🧠 AI";
-      const vis3 = b3.visible ? "👁" : "🚫";
-      ctx.fillText(
-        `${vis3} A3[3]: χ${b3.chi.toFixed(1)} ${b3.alive ? "✓" : "✗"} sense:${Math.round(b3.currentSensoryRange)} ${controller3} cr:${Ledger.getCredits(3).toFixed(1)}`,
-        10, 54
-      );
-      bar(10, 58, 60, 4, b3.frustration, "#ffff55");
-      bar(73, 58, 60, 4, b3.hunger, "#ff8800");
+      if (b3) {
+        ctx.fillStyle = "#ffff00";
+        const controller3 = b3.useController && b3.controller 
+          ? (b3.controller.constructor.name === "LinearPolicyController" ? "🤖 POLICY" : "🎮 CTRL")
+          : "🧠 AI";
+        const vis3 = b3.visible ? "👁" : "🚫";
+        ctx.fillText(
+          `${vis3} A3[3]: χ${b3.chi.toFixed(1)} ${b3.alive ? "✓" : "✗"} sense:${Math.round(b3.currentSensoryRange)} ${controller3} cr:${Ledger.getCredits(3).toFixed(1)}`,
+          10, 54
+        );
+        bar(10, 58, 60, 4, b3.frustration, "#ffff55");
+        bar(73, 58, 60, 4, b3.hunger, "#ff8800");
+      }
 
       // Agent 4
       const b4 = World.bundles[3];
-      ctx.fillStyle = "#ff8800";
-      const controller4 = b4.useController && b4.controller 
-        ? (b4.controller.constructor.name === "LinearPolicyController" ? "🤖 POLICY" : "🎮 CTRL")
-        : "🧠 AI";
-      const vis4 = b4.visible ? "👁" : "🚫";
-      ctx.fillText(
-        `${vis4} A4[4]: χ${b4.chi.toFixed(1)} ${b4.alive ? "✓" : "✗"} sense:${Math.round(b4.currentSensoryRange)} ${controller4} cr:${Ledger.getCredits(4).toFixed(1)}`,
-        10, 72
-      );
-      bar(10, 76, 60, 4, b4.frustration, "#ff8855");
-      bar(73, 76, 60, 4, b4.hunger, "#ff8800");
+      if (b4) {
+        ctx.fillStyle = "#ff8800";
+        const controller4 = b4.useController && b4.controller 
+          ? (b4.controller.constructor.name === "LinearPolicyController" ? "🤖 POLICY" : "🎮 CTRL")
+          : "🧠 AI";
+        const vis4 = b4.visible ? "👁" : "🚫";
+        ctx.fillText(
+          `${vis4} A4[4]: χ${b4.chi.toFixed(1)} ${b4.alive ? "✓" : "✗"} sense:${Math.round(b4.currentSensoryRange)} ${controller4} cr:${Ledger.getCredits(4).toFixed(1)}`,
+          10, 72
+        );
+        bar(10, 76, 60, 4, b4.frustration, "#ff8855");
+        bar(73, 76, 60, 4, b4.hunger, "#ff8800");
+      }
   
       // Population summary (if more than 4 agents)
       if (World.bundles.length > 4) {
@@ -1485,7 +1524,8 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
           if (!b.alive) return;
           
           for (let res of World.resources) {
-            if (b.overlapsResource(res)) {
+            // Only collect if resource is visible (not on cooldown)
+            if (res.visible && b.overlapsResource(res)) {
               b.chi += CONFIG.rewardChi;
               b.alive = true;
               b.lastCollectTick = globalTick;
@@ -1503,7 +1543,8 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
                 FertilityField.depleteAt(res.x, res.y, globalTick);
               }
               
-              res.respawn();
+              // Start cooldown instead of immediate respawn
+              res.startCooldown();
               break; // Only collect one resource per frame
             }
           }
@@ -1616,8 +1657,12 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
       
       Trail.draw();
       
-      // Draw all resources
-      World.resources.forEach(res => res.draw(ctx));
+      // Draw all resources (only visible ones)
+      World.resources.forEach(res => {
+        if (res.visible) {
+          res.draw(ctx);
+        }
+      });
       
       World.bundles.forEach(b => b.draw(ctx));
       drawHUD();
@@ -1680,7 +1725,8 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
           let collectedResource = false;
           
           for (let res of World.resources) {
-            if (bundle.alive && bundle.overlapsResource(res)) {
+            // Only collect if resource is visible (not on cooldown)
+            if (bundle.alive && res.visible && bundle.overlapsResource(res)) {
               // === Adaptive Reward Calculation ===
               let rewardChi;
               
@@ -1716,7 +1762,8 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
               bundle.decayProgress = 0;
               World.collected += 1;
               World.onResourceCollected(); // Track ecology impact
-              res.respawn();
+              // Start cooldown instead of immediate respawn
+              res.startCooldown();
               collectedResource = true;
               totalCollected++;
               break; // Only collect one resource per frame
