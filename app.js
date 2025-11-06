@@ -169,6 +169,16 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
   
     // ---------- Helpers ----------
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    const SIGNAL_CHANNELS = {
+      resource: 0,
+      distress: 1,
+      bond: 2
+    };
+    const normalizeRewardSignal = (rewardChi) => {
+      if (!Number.isFinite(rewardChi)) return 0;
+      const base = Math.max(CONFIG.rewardChi || rewardChi || 0, 1e-6);
+      return clamp(rewardChi / base, 0, 1);
+    };
     const mix = (a,b,t)=>a+(b-a)*t;
     const randomRange = (min, max) => Math.random() * (max - min) + min;
     const smoothstep = (e0,e1,x)=> {
@@ -263,11 +273,24 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
     function provokeBondedExploration(deadId) {
       const duration = CONFIG.bondLoss?.onDeathBoostDuration ?? 600;
       const affected = linksForAgent(deadId);
+      const deadBundle = getBundleById(deadId);
+      const deathPos = deadBundle ? { x: deadBundle.x, y: deadBundle.y } : null;
       for (const L of affected) {
         const survivorId = otherId(L, deadId);
         const survivor = getBundleById(survivorId);
         if (survivor && survivor.alive) {
-          survivor.bereavementBoostTicks = Math.max(survivor.bereavementBoostTicks || 0, duration);
+          const previousTicks = survivor.bereavementBoostTicks || 0;
+          const nextTicks = Math.max(previousTicks, duration);
+          survivor.bereavementBoostTicks = nextTicks;
+          const distressStrength = clamp(L.strength / 2, 0, 1);
+          if (distressStrength > 0) {
+            survivor.emitSignal('distress', distressStrength, { cap: 1 });
+            if (deadBundle && deathPos) {
+              deadBundle.emitSignal('distress', distressStrength, { cap: 1, x: deathPos.x, y: deathPos.y });
+            } else if (deathPos && CONFIG.signal?.enabled && SignalField) {
+              SignalField.deposit(deathPos.x, deathPos.y, distressStrength, SIGNAL_CHANNELS.distress);
+            }
+          }
         }
       }
       // Immediately remove links tied to dead agent to avoid stale guidance
@@ -329,6 +352,11 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
         if (useFactor > 0) {
           L.strength += CONFIG.link.strengthenPerUse * dt;
           L.lastUseTick = globalTick;
+        }
+        const bondSignal = clamp(L.strength * 0.15 * dt, 0, 1);
+        if (bondSignal > 0) {
+          a.emitSignal('bond', bondSignal, { cap: 1 });
+          b.emitSignal('bond', bondSignal, { cap: 1 });
         }
         // clamp and breakage
         if (L.strength < CONFIG.link.minStrength) { Links.splice(i, 1); continue; }
@@ -556,6 +584,9 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
 
         // Bond-loss exploration boost (bereavement)
         this.bereavementBoostTicks = 0; // ticks remaining for exploration boost
+
+        // Signal emission bookkeeping (per-channel amplitudes per tick)
+        this.signal_profile = {};
       }
   
       computeSensoryRange(dt) {
@@ -741,7 +772,7 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
   
       update(dt, resource) {
         if (!this.alive) return;
-  
+
         // Base metabolism + sensing costs
         let chiSpend = CONFIG.baseDecayPerSecond * dt;
         chiSpend += this.computeSensoryRange(dt);
@@ -824,9 +855,39 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
           // Signal bonded survivors and remove dead links immediately
           provokeBondedExploration(this.id);
         }
-        
+
         // Decay bereavement boost (per tick)
         if (this.bereavementBoostTicks > 0) this.bereavementBoostTicks--;
+      }
+
+      emitSignal(channel, amount, options = {}) {
+        if (!CONFIG.signal?.enabled) return;
+        if (!SignalField || typeof SignalField.deposit !== 'function') return;
+        const channelIndex = SIGNAL_CHANNELS[channel];
+        if (channelIndex === undefined) return;
+
+        const cap = Number.isFinite(options.cap) ? options.cap : 1;
+        const normalized = clamp(amount, 0, cap);
+        if (normalized <= 0) return;
+
+        if (!this.signal_profile[channel]) {
+          this.signal_profile[channel] = { tick: -1, amplitude: 0 };
+        }
+        const profile = this.signal_profile[channel];
+        if (profile.tick !== globalTick) {
+          profile.tick = globalTick;
+          profile.amplitude = 0;
+        }
+
+        const absolute = options.absolute === true;
+        const target = absolute ? normalized : Math.min(cap, profile.amplitude + normalized);
+        const delta = target - profile.amplitude;
+        if (delta <= 0) return;
+
+        profile.amplitude = target;
+        const px = Number.isFinite(options.x) ? options.x : this.x;
+        const py = Number.isFinite(options.y) ? options.y : this.y;
+        SignalField.deposit(px, py, delta, channelIndex);
       }
 
       updateHunger(dt) {
@@ -2209,7 +2270,8 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
           for (let res of World.resources) {
             // Only collect if resource is visible (not on cooldown)
             if (res.visible && b.overlapsResource(res)) {
-              b.chi += CONFIG.rewardChi;
+              const rewardChi = CONFIG.rewardChi;
+              b.chi += rewardChi;
               b.alive = true;
               b.lastCollectTick = globalTick;
               b.frustration = 0;
@@ -2218,9 +2280,13 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
               // Reset decay state (in case agent was dead/decaying)
               b.deathTick = -1;
               b.decayProgress = 0;
+              const rewardSignal = normalizeRewardSignal(rewardChi);
+              if (rewardSignal > 0) {
+                b.emitSignal('resource', rewardSignal, { absolute: true, x: b.x, y: b.y });
+              }
               World.collected += 1;
               World.onResourceCollected(); // Track ecology impact
-              
+
               // Deplete fertility at harvest location (plant ecology)
               if (CONFIG.plantEcology.enabled && FertilityField) {
                 FertilityField.depleteAt(res.x, res.y, globalTick);
@@ -2474,6 +2540,10 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
               // Reset decay state (in case agent was dead/decaying)
               bundle.deathTick = -1;
               bundle.decayProgress = 0;
+              const rewardSignal = normalizeRewardSignal(rewardChi);
+              if (rewardSignal > 0) {
+                bundle.emitSignal('resource', rewardSignal, { absolute: true, x: bundle.x, y: bundle.y });
+              }
               World.collected += 1;
               World.onResourceCollected(); // Track ecology impact
               // Start cooldown instead of immediate respawn
