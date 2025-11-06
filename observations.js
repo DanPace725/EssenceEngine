@@ -8,7 +8,7 @@ import { getScentGradient, getFoodDensitySensing } from './scentGradient.js';
  * Build observation vector for a bundle
  * Returns both raw object and flat normalized vector
  * 
- * Observation components (23 dims total):
+ * Observation components (29 dims total):
  * - χ state: [chi_norm, frustration, alive]  (3)
  * - Motion: [vx_norm, vy_norm]               (2)
  * - Walls: [nx, ny, edge_mag]                (3)
@@ -16,6 +16,7 @@ import { getScentGradient, getFoodDensitySensing } from './scentGradient.js';
  * - Trails: [trail_mean, trail_max, tdir_x, tdir_y] (4)
  * - Scent Gradient: [intensity, grad_x, grad_y] (3) - NEW!
  * - Food Density: [near, mid, far, dens_dir_x, dens_dir_y] (5) - NEW!
+ * - Signal Field: [sig_res, sig_distress, sig_bond, bias_res, bias_distress, bias_bond] (6) - NEW!
  */
 export function buildObservation(bundle, resource, Trail, globalTick, resources = []) {
   const obs = {};
@@ -64,7 +65,16 @@ export function buildObservation(bundle, resource, Trail, globalTick, resources 
   obs.densityFar = densityInfo.far;
   obs.densityDirX = densityInfo.dirX;
   obs.densityDirY = densityInfo.dirY;
-  
+
+  // === Signal Field perception ===
+  const signalInfo = getSignalObservation(bundle);
+  obs.signalResource = signalInfo.resourceAmp;
+  obs.signalDistress = signalInfo.distressAmp;
+  obs.signalBond = signalInfo.bondAmp;
+  obs.signalBiasResource = signalInfo.resourceBias;
+  obs.signalBiasDistress = signalInfo.distressBias;
+  obs.signalBiasBond = signalInfo.bondConflict;
+
   // === Build flat vector ===
   obs.vector = [
     obs.chi,
@@ -89,7 +99,13 @@ export function buildObservation(bundle, resource, Trail, globalTick, resources 
     obs.densityMid,
     obs.densityFar,
     obs.densityDirX,
-    obs.densityDirY
+    obs.densityDirY,
+    obs.signalResource,
+    obs.signalDistress,
+    obs.signalBond,
+    obs.signalBiasResource,
+    obs.signalBiasDistress,
+    obs.signalBiasBond
   ];
   
   // Store resource reference for heuristic controller
@@ -171,7 +187,7 @@ function getResourceInfo(bundle, resource) {
 function sampleTrails(bundle, Trail) {
   const sampleDist = CONFIG.aiSampleDistance;
   const numSamples = 16;
-  
+
   let sum = 0;
   let max = 0;
   let maxAngle = 0;
@@ -203,5 +219,40 @@ function sampleTrails(bundle, Trail) {
   const dirY = max > 0 ? Math.sin(maxAngle) : 0;
   
   return { mean, max, dirX, dirY };
+}
+
+function getSignalObservation(bundle) {
+  const channels = ['resource', 'distress', 'bond'];
+  const amplitudes = {};
+  for (const channel of channels) {
+    let amp = 0;
+    if (typeof bundle?.getSignalAverage === 'function') {
+      amp = bundle.getSignalAverage(channel);
+    } else if (bundle?.signal_memory?.[channel]?.values) {
+      const mem = bundle.signal_memory[channel];
+      const len = mem.values.length || 1;
+      const sum = mem.values.reduce((acc, v) => acc + (Number.isFinite(v) ? v : 0), 0);
+      amp = sum / len;
+    }
+    amplitudes[channel] = clamp01(amp);
+  }
+
+  const bias = bundle?.interpretation_bias || {};
+
+  return {
+    resourceAmp: amplitudes.resource || 0,
+    distressAmp: amplitudes.distress || 0,
+    bondAmp: amplitudes.bond || 0,
+    resourceBias: clamp01(bias.resource),
+    distressBias: clamp01(bias.distress),
+    bondConflict: clamp01(bias.bond)
+  };
+}
+
+function clamp01(value) {
+  if (!Number.isFinite(value)) return 0;
+  if (value < 0) return 0;
+  if (value > 1) return 1;
+  return value;
 }
 

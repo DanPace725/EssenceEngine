@@ -76,6 +76,10 @@ export class TrainingUI {
         <div>Best Reward: <span id="stat-best">-</span></div>
         <div>Mean Reward: <span id="stat-mean">-</span></div>
         <div>Status: <span id="stat-status">Idle</span></div>
+        <div style="margin-top:8px;">Signal Diversity: <span id="stat-signal-diversity">-</span></div>
+        <div>Signal Coherence: <span id="stat-signal-coherence">-</span></div>
+        <div>Signal SNR: <span id="stat-signal-snr">-</span></div>
+        <div>Signal Power: <span id="stat-signal-power">-</span></div>
       </div>
     `;
     this.panel.appendChild(statsSection);
@@ -202,13 +206,39 @@ export class TrainingUI {
   // Update statistics
   updateStats(stats) {
     document.getElementById('stat-generation').textContent = stats.generation || 0;
-    document.getElementById('stat-policy').textContent = stats.currentPolicy !== undefined ? 
+    document.getElementById('stat-policy').textContent = stats.currentPolicy !== undefined ?
       `${stats.currentPolicy + 1}/${stats.populationSize}` : '-';
-    document.getElementById('stat-best').textContent = stats.bestReward ? 
+    document.getElementById('stat-best').textContent = stats.bestReward ?
       stats.bestReward.toFixed(2) : '-';
-    document.getElementById('stat-mean').textContent = stats.meanReward ? 
+    document.getElementById('stat-mean').textContent = stats.meanReward ?
       stats.meanReward.toFixed(2) : '-';
     document.getElementById('stat-status').textContent = stats.status || 'Idle';
+  }
+
+  updateSignalStats(signal) {
+    if (!signal) return;
+    const { channelCount = 0, diversity = 0, coherence = 0, snr = [], totalPower = [] } = signal;
+
+    const diversityEl = document.getElementById('stat-signal-diversity');
+    if (diversityEl) {
+      const ratio = channelCount ? `${diversity}/${channelCount}` : `${diversity}`;
+      diversityEl.textContent = ratio;
+    }
+
+    const coherenceEl = document.getElementById('stat-signal-coherence');
+    if (coherenceEl) {
+      coherenceEl.textContent = `${(coherence * 100).toFixed(1)}%`;
+    }
+
+    const snrEl = document.getElementById('stat-signal-snr');
+    if (snrEl) {
+      snrEl.textContent = snr.length ? snr.map((v, i) => `C${i}:${v.toFixed(2)}`).join(' ') : '-';
+    }
+
+    const powerEl = document.getElementById('stat-signal-power');
+    if (powerEl) {
+      powerEl.textContent = totalPower.length ? totalPower.map((v, i) => `C${i}:${v.toFixed(1)}`).join(' ') : '-';
+    }
   }
   
   // Show loaded policy info

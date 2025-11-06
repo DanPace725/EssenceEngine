@@ -81,7 +81,13 @@ export function getScentGradient(x, y, resources) {
       nearestDist = dist;
     }
     
-    const intensity = calculateScentIntensity(dist);
+    // Use per-resource consumable strength/range when available
+    const cfg = {
+      ...CONFIG.scentGradient,
+      maxRange: Math.max(CONFIG.scentGradient.minRange || 0, resource.scentRange || CONFIG.scentGradient.maxRange),
+      strength: Math.max(CONFIG.scentGradient.minStrength || 0, resource.scentStrength || CONFIG.scentGradient.strength)
+    };
+    const intensity = calculateScentIntensity(dist, cfg);
     
     if (intensity > 0 && dist > 0) {
       totalIntensity += intensity;

@@ -2,8 +2,10 @@
 // Controls: [WASD/Arrows]=move (Agent 1 when MANUAL) | [A]=auto toggle | [S]=toggle extended sensing
 // [G]=scent gradient viz | [P]=fertility viz | [M]=mitosis toggle | [Space]=pause [R]=reset [C]=+5χ all 
 // [T]=trail on/off [X]=clear trail [F]=diffusion on/off | [1-4]=toggle individual agents | [V]=toggle all | [L]=training UI
+// [H]=agent dashboard | [U]=cycle HUD (full/minimal/hidden) | [K]=toggle hotkey strip | [O]=config panel
 
 import { CONFIG } from './config.js';
+import { SignalField } from './signalField.js';
 import { HeuristicController, LinearPolicyController } from './controllers.js';
 import { buildObservation } from './observations.js';
 import { RewardTracker, EpisodeManager, updateFindTimeEMA, calculateAdaptiveReward } from './rewards.js';
@@ -11,6 +13,7 @@ import { CEMLearner, TrainingManager } from './learner.js';
 import { TrainingUI } from './trainingUI.js';
 import { visualizeScentGradient, visualizeScentHeatmap } from './scentGradient.js';
 import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResourceSpawnLocation, getSpawnPressureMultiplier } from './plantEcology.js';
+import { SignalResponseAnalytics } from './analysis/signalResponseAnalytics.js';
 
 (() => {
     const canvas = document.getElementById("view");
@@ -18,27 +21,93 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
   
     // ---------- DPR-aware sizing ----------
     let dpr = 1;
+    let canvasWidth = innerWidth;
+    let canvasHeight = innerHeight;
+    
+    // Initialize UI state variables before getAvailableSize uses them
+    let showAgentDashboard = false; // Toggle for agent dashboard overlay
+    
+    const getAvailableSize = () => {
+      const configPanel = document.getElementById("config-panel");
+      const panelOpen = configPanel && configPanel.style.display !== "none";
+      const panelWidth = panelOpen ? 360 : 0; // Config panel width
+      // Canvas now fills full viewport, HUD/Dashboard are drawn on top
+      
+      return {
+        width: innerWidth - panelWidth,
+        height: innerHeight,
+        panelWidth: panelWidth,
+        topReserve: 0
+      };
+    };
+    
     const resize = () => {
       dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
-      canvas.width  = Math.floor(innerWidth  * dpr);
-      canvas.height = Math.floor(innerHeight * dpr);
+      const avail = getAvailableSize();
+      canvasWidth = avail.width;
+      canvasHeight = avail.height;
+      
+      canvas.width  = Math.floor(canvasWidth  * dpr);
+      canvas.height = Math.floor(canvasHeight * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      Trail.resize();
+      
+      // Update canvas CSS to position it correctly - full viewport
+      canvas.style.width = `${canvasWidth}px`;
+      canvas.style.height = `${canvasHeight}px`;
+      canvas.style.position = "fixed";
+      canvas.style.top = "0";
+      canvas.style.left = "0";
+      
+      // Only resize Trail if it's been initialized
+      // Trail is defined later in the code, so we check if it exists
+      if (typeof Trail !== 'undefined' && Trail && Trail.resize) {
+        Trail.resize();
+      }
+
+      if (SignalField && SignalField.resize) {
+        SignalField.resize(canvasWidth, canvasHeight, ctx);
+      }
+      
+      // Recreate FertilityField if plant ecology is enabled
+      if (CONFIG.plantEcology.enabled && typeof FertilityGrid !== 'undefined') {
+        FertilityField = new FertilityGrid(canvasWidth, canvasHeight);
+      }
     };
     window.addEventListener("resize", resize, { passive: true });
+    
+    // Expose resize function globally so config panel can trigger it
+    window.resizeCanvas = resize;
+    
+    // Note: Initial resize will be called after Trail is defined
   
     // Config is now imported from config.js
   
     // ---------- Input ----------
     const held = new Set();
-    let showScentGradient = false; // Toggle for scent gradient visualization
+    let showScentGradient = true; // Toggle for scent gradient visualization
     let showFertility = false; // Toggle for fertility grid visualization
+    let hudDisplayMode = 'full'; // 'full', 'minimal', or 'hidden'
+    let showHotkeyStrip = true; // Toggle for hotkey strip at bottom
     
     window.addEventListener("keydown", (e) => {
       const k = e.key.toLowerCase();
       if (["arrowup","w","arrowdown","s","arrowleft","a","arrowright","d"].includes(k)) held.add(k);
       if (e.code === "Space") { World.paused = !World.paused; e.preventDefault(); }
       else if (e.code === "KeyR") { World.reset(); }
+      else if (e.code === "KeyK") { 
+        // Toggle hotkey strip
+        showHotkeyStrip = !showHotkeyStrip;
+        const hotkeyStrip = document.getElementById("hotkey-strip");
+        if (hotkeyStrip) {
+          if (showHotkeyStrip) {
+            hotkeyStrip.classList.remove("hidden");
+          } else {
+            hotkeyStrip.classList.add("hidden");
+          }
+        }
+        console.log(`⌨️  Hotkey strip ${showHotkeyStrip ? "VISIBLE" : "HIDDEN"}`);
+        e.preventDefault();
+      }
       else if (e.code === "KeyC") { 
         World.bundles.forEach(b => { 
           b.chi += 5; 
@@ -50,7 +119,7 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
       }
       else if (e.code === "KeyS") { World.bundles.forEach(b => { b.extendedSensing = !b.extendedSensing; }); }
       else if (e.code === "KeyT") { CONFIG.renderTrail = !CONFIG.renderTrail; }
-      else if (e.code === "KeyX") { Trail.clear(); }
+      else if (e.code === "KeyX") { Trail.clear(); SignalField.clear(); }
       else if (e.code === "KeyF") { CONFIG.enableDiffusion = !CONFIG.enableDiffusion; }
       else if (e.code === "KeyA") { CONFIG.autoMove = !CONFIG.autoMove; }
       else if (e.code === "KeyL") { if (window.trainingUI) window.trainingUI.toggle(); }
@@ -59,27 +128,88 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
         CONFIG.mitosis.enabled = !CONFIG.mitosis.enabled; 
         console.log(`🧫 Mitosis ${CONFIG.mitosis.enabled ? "ENABLED" : "DISABLED"}`);
       } // Toggle mitosis
-      else if (e.code === "KeyP") { 
-        showFertility = !showFertility; 
+      else if (e.code === "KeyP") {
+        showFertility = !showFertility;
       } // Toggle plant/fertility visualization
+      else if (e.code === "KeyH") {
+        showAgentDashboard = !showAgentDashboard;
+      } // Toggle agent dashboard overlay
+      else if (e.code === "KeyU") {
+        // Cycle through HUD display modes: full -> minimal -> hidden -> full
+        if (hudDisplayMode === 'full') hudDisplayMode = 'minimal';
+        else if (hudDisplayMode === 'minimal') hudDisplayMode = 'hidden';
+        else hudDisplayMode = 'full';
+        console.log(`📊 HUD mode: ${hudDisplayMode.toUpperCase()}`);
+      } // Toggle HUD display mode
       // Toggle individual agents visibility
       else if (e.code === "Digit1") { if (World.bundles[0]) World.bundles[0].visible = !World.bundles[0].visible; }
       else if (e.code === "Digit2") { if (World.bundles[1]) World.bundles[1].visible = !World.bundles[1].visible; }
       else if (e.code === "Digit3") { if (World.bundles[2]) World.bundles[2].visible = !World.bundles[2].visible; }
       else if (e.code === "Digit4") { if (World.bundles[3]) World.bundles[3].visible = !World.bundles[3].visible; }
       else if (e.code === "KeyV") { World.bundles.forEach(b => b.visible = !b.visible); } // Toggle all
+      else if (e.code === "KeyE") {
+        // Take screenshot
+        e.preventDefault();
+        canvas.toBlob((blob) => {
+          if (!blob) return;
+          const url = URL.createObjectURL(blob);
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+          const filename = `slime-screenshot-${timestamp}.png`;
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          console.log(`📸 Screenshot saved: ${filename}`);
+        }, 'image/png');
+      }
     });
     window.addEventListener("keyup", (e) => held.delete(e.key.toLowerCase()));
   
     // ---------- Helpers ----------
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    const SIGNAL_CHANNELS = {
+      resource: 0,
+      distress: 1,
+      bond: 2
+    };
+    const SIGNAL_MEMORY_LENGTH = Math.max(3, CONFIG.signal?.memoryLength || 12);
+    const SIGNAL_DISTRESS_NOISE_GAIN = 1.5;
+    const SIGNAL_RESOURCE_PULL_GAIN = 0.65;
+    const SIGNAL_BOND_CONFLICT_DAMP = 0.7;
+    const normalizeRewardSignal = (rewardChi) => {
+      if (!Number.isFinite(rewardChi)) return 0;
+      const base = Math.max(CONFIG.rewardChi || rewardChi || 0, 1e-6);
+      return clamp(rewardChi / base, 0, 1);
+    };
     const mix = (a,b,t)=>a+(b-a)*t;
     const randomRange = (min, max) => Math.random() * (max - min) + min;
     const smoothstep = (e0,e1,x)=> {
       const t = clamp((x - e0) / Math.max(1e-6, e1 - e0), 0, 1);
       return t * t * (3 - 2 * t);
     };
-    
+    const getSignalConfig = () => CONFIG.signal || {};
+    const getSignalSensitivity = (channel) => {
+      const cfg = getSignalConfig();
+      return cfg?.sensitivity?.[channel] ?? 1;
+    };
+    const getSignalDecayRate = (channel) => {
+      const cfg = getSignalConfig();
+      return clamp(cfg?.decay?.[channel] ?? 0.08, 0, 1);
+    };
+    const getSignalWeight = (channel) => {
+      const cfg = getSignalConfig();
+      const value = cfg?.channelWeights?.[channel];
+      return Number.isFinite(value) ? value : 1;
+    };
+    const getSignalActivationThreshold = () => {
+      const cfg = getSignalConfig();
+      const value = cfg?.activationThreshold;
+      return clamp(Number.isFinite(value) ? value : 0.05, 0, 1);
+    };
+
     // Generate color for agent based on ID (supports unlimited agents)
     const getAgentColor = (id, alive = true) => {
       // First 4 agents use classic colors for consistency
@@ -141,11 +271,140 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
   
     // ---------- Global time & economy ----------
     let globalTick = 0;
+    let lastSignalStatTick = 0;
     const Ledger = {
       credits: {},  // authorId -> total χ from reuse
       credit(authorId, amount) { this.credits[authorId] = (this.credits[authorId] || 0) + amount; },
       getCredits(authorId) { return this.credits[authorId] || 0; }
     };
+    
+    // ---------- Link System (agent-to-agent tubes) ----------
+    // Link: { aId, bId, strength, age, restLen, lastUseTick }
+    const Links = [];
+    function linksForAgent(id) {
+      return Links.filter(L => L.aId === id || L.bId === id);
+    }
+    function otherId(L, id) { return L.aId === id ? L.bId : L.aId; }
+    function getBundleById(id) { return World.bundles.find(b => b.id === id); }
+    function linkExists(aId, bId) {
+      return Links.some(L => (L.aId === aId && L.bId === bId) || (L.aId === bId && L.bId === aId));
+    }
+    function removeLinksFor(id) {
+      for (let i = Links.length - 1; i >= 0; i--) {
+        const L = Links[i];
+        if (L.aId === id || L.bId === id) Links.splice(i, 1);
+      }
+    }
+    function provokeBondedExploration(deadId) {
+      const duration = CONFIG.bondLoss?.onDeathBoostDuration ?? 600;
+      const affected = linksForAgent(deadId);
+      const deadBundle = getBundleById(deadId);
+      const deathPos = deadBundle ? { x: deadBundle.x, y: deadBundle.y } : null;
+      for (const L of affected) {
+        const survivorId = otherId(L, deadId);
+        const survivor = getBundleById(survivorId);
+        if (survivor && survivor.alive) {
+          const previousTicks = survivor.bereavementBoostTicks || 0;
+          const nextTicks = Math.max(previousTicks, duration);
+          survivor.bereavementBoostTicks = nextTicks;
+          const distressStrength = clamp(L.strength / 2, 0, 1);
+          if (distressStrength > 0) {
+            survivor.emitSignal('distress', distressStrength, { cap: 1 });
+            if (deadBundle && deathPos) {
+              deadBundle.emitSignal('distress', distressStrength, { cap: 1, x: deathPos.x, y: deathPos.y });
+            } else if (deathPos && CONFIG.signal?.enabled && SignalField) {
+              SignalField.deposit(deathPos.x, deathPos.y, distressStrength, SIGNAL_CHANNELS.distress);
+            }
+          }
+        }
+      }
+      // Immediately remove links tied to dead agent to avoid stale guidance
+      removeLinksFor(deadId);
+    }
+    function tryFormLink(a, b) {
+      const maxR = CONFIG.link.radius;
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const d = Math.hypot(dx, dy);
+      if (d > maxR) return;
+      if (!a.alive || !b.alive) return;
+      if (linkExists(a.id, b.id)) return;
+      if (a.chi < CONFIG.link.formCost || b.chi < CONFIG.link.formCost) return;
+      // Shared-context: same hot trail cell snapshot
+      const sA = Trail.sample(a.x, a.y);
+      const sB = Trail.sample(b.x, b.y);
+      const sharedHot = Math.min(sA.value, sB.value) > CONFIG.link.trailMin;
+      if (!sharedHot) return;
+      a.chi -= CONFIG.link.formCost;
+      b.chi -= CONFIG.link.formCost;
+      Links.push({
+        aId: a.id,
+        bId: b.id,
+        strength: CONFIG.link.initStrength,
+        age: 0,
+        restLen: d,
+        lastUseTick: globalTick
+      });
+    }
+    function maintainLinks(dt) {
+      // maintenance leak and passive decay; strengthen on use; breakage
+      for (let i = Links.length - 1; i >= 0; i--) {
+        const L = Links[i];
+        const a = getBundleById(L.aId);
+        const b = getBundleById(L.bId);
+        if (!a || !b || !a.alive || !b.alive) { Links.splice(i, 1); continue; }
+        // χ maintenance proportional to strength
+        const leak = CONFIG.link.maintPerSec * L.strength * dt;
+        a.chi = Math.max(0, a.chi - leak);
+        b.chi = Math.max(0, b.chi - leak);
+        // passive decay
+        L.strength -= CONFIG.link.decayPerSec * dt;
+        // hunger-driven extra decay (averaged)
+        const hA = clamp(a.hunger, 0, 1);
+        const hB = clamp(b.hunger, 0, 1);
+        const escapeA = Math.max(0, (hA - CONFIG.hungerThresholdHigh)) / Math.max(1e-6, 1 - CONFIG.hungerThresholdHigh);
+        const escapeB = Math.max(0, (hB - CONFIG.hungerThresholdHigh)) / Math.max(1e-6, 1 - CONFIG.hungerThresholdHigh);
+        const hungerEsc = (escapeA * escapeA + escapeB * escapeB) * 0.5; // quadratic mean
+        if (hungerEsc > 0) {
+          L.strength -= CONFIG.link.hungerDecayPerSec * hungerEsc * dt;
+        }
+        // use-based strengthening: projection of velocity along link direction
+        const vx = b.x - a.x, vy = b.y - a.y;
+        const len = Math.hypot(vx, vy) || 1;
+        const ux = vx / len, uy = vy / len;
+        const aProj = (a.vx * ux + a.vy * uy);
+        const bProj = (b.vx * ux + b.vy * uy) * -1; // moving toward each other counts
+        const useFactor = Math.max(0, aProj) + Math.max(0, bProj);
+        if (useFactor > 0) {
+          L.strength += CONFIG.link.strengthenPerUse * dt;
+          L.lastUseTick = globalTick;
+        }
+        const bondSignal = clamp(L.strength * 0.15 * dt, 0, 1);
+        if (bondSignal > 0) {
+          a.emitSignal('bond', bondSignal, { cap: 1 });
+          b.emitSignal('bond', bondSignal, { cap: 1 });
+        }
+        // clamp and breakage
+        if (L.strength < CONFIG.link.minStrength) { Links.splice(i, 1); continue; }
+        L.strength = Math.min(2.0, Math.max(0, L.strength));
+        L.age += dt;
+      }
+    }
+    function reinforceLinks(dt) {
+      // deposit faint trail along each link segment, scaled by strength
+      const samples = 10;
+      for (const L of Links) {
+        const a = getBundleById(L.aId);
+        const b = getBundleById(L.bId);
+        if (!a || !b) continue;
+        const depBase = CONFIG.depositPerSec * 0.01 * L.strength * dt; // Reduced from 0.1 to 0.01
+        for (let s = 0; s <= samples; s++) {
+          const t = s / samples;
+          const x = a.x + (b.x - a.x) * t;
+          const y = a.y + (b.y - a.y) * t;
+          Trail.deposit(x, y, depBase, 0); // authorId 0 for neutral paving
+        }
+      }
+    }
   
     // ---------- Learning System ----------
     let learningMode = 'play'; // 'play' or 'train'
@@ -166,8 +425,8 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
   
       resize() {
         this.cell = CONFIG.trailCell;
-        this.w = Math.max(1, Math.floor(innerWidth  / this.cell));
-        this.h = Math.max(1, Math.floor(innerHeight / this.cell));
+        this.w = Math.max(1, Math.floor(canvasWidth  / this.cell));
+        this.h = Math.max(1, Math.floor(canvasHeight / this.cell));
         const len = this.w * this.h;
         this.buf = new Float32Array(len);
         this.tmp = new Float32Array(len);
@@ -267,7 +526,8 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
           const o = i * 4;
           
           // Get color based on author using dynamic color function
-          const color = authorId !== 0 ? getAgentColorRGB(authorId) : { r: 0, g: 255, b: 0 };
+          // Neutral deposits (authorId===0) use a subtle gray to avoid overpowering
+          const color = authorId !== 0 ? getAgentColorRGB(authorId) : { r: 140, g: 140, b: 140 };
           
           data[o+0] = Math.floor(color.r * intensity / 255);
           data[o+1] = Math.floor(color.g * intensity / 255);
@@ -289,13 +549,18 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
         ctx.restore();
       }
     };
-    resize();
+    
+    // Call resize after Trail is defined (done later in code)
+    // resize(); // Moved to after Trail initialization
     
     // ---------- Fertility Grid (Plant Ecology) ----------
     let FertilityField = null;
     if (CONFIG.plantEcology.enabled) {
-      FertilityField = new FertilityGrid(innerWidth, innerHeight);
+      FertilityField = new FertilityGrid(canvasWidth, canvasHeight);
     }
+    
+    // Now that Trail is defined, call initial resize
+    resize();
   
     // ---------- Entities ----------
     class Bundle {
@@ -319,6 +584,20 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
         // hunger (0..1) - biological drive that amplifies exploration and frustration
         this.hunger = 0;
 
+        // signal perception history and interpretations
+        this.signal_memory = {};
+        this.interpretation_bias = {};
+        this.signalContext = {};
+        this._signalContextTick = -1;
+        for (const channel of Object.keys(SIGNAL_CHANNELS)) {
+          this.signal_memory[channel] = {
+            values: new Array(SIGNAL_MEMORY_LENGTH).fill(0),
+            index: 0,
+            sum: 0
+          };
+          this.interpretation_bias[channel] = 0;
+        }
+
         // heading cache & angle
         this._lastDirX = 1; this._lastDirY = 0;
         this.heading = 0; // angle in radians (0 = right, π/2 = down)
@@ -341,6 +620,12 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
         this.deathTick = -1; // Tick when agent died (-1 = not dead)
         this.decayProgress = 0; // 0 to 1, how much decayed
         this.chiAtDeath = 0; // Chi remaining when died (for recycling)
+
+        // Bond-loss exploration boost (bereavement)
+        this.bereavementBoostTicks = 0; // ticks remaining for exploration boost
+
+        // Signal emission bookkeeping (per-channel amplitudes per tick)
+        this.signal_profile = {};
       }
   
       computeSensoryRange(dt) {
@@ -394,15 +679,22 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
       computeAIDirection(resource) {
         let dx = 0, dy = 0;
         let resourceVisible = false;
+        const signals = this.signalContext || {};
+        const distressBias = clamp(this.interpretation_bias?.distress ?? 0, 0, 1);
+        const resourceBias = clamp(this.interpretation_bias?.resource ?? 0, 0, 1);
+        const bondConflict = clamp(this.interpretation_bias?.bond ?? 0, 0, 1);
+        const resourceWeight = getSignalWeight('resource');
+        const distressWeight = getSignalWeight('distress');
+        const bondWeight = getSignalWeight('bond');
 
         // (1) Wall avoidance - repulsion from ALL nearby walls (handles corners!)
         const wallMargin = CONFIG.aiWallAvoidMargin;
         const wallStrength = CONFIG.aiWallAvoidStrength;
         
         const dLeft = this.x;
-        const dRight = innerWidth - this.x;
+        const dRight = canvasWidth - this.x;
         const dTop = this.y;
-        const dBottom = innerHeight - this.y;
+        const dBottom = canvasHeight - this.y;
         
         // Apply repulsion from each wall independently (creates diagonal escape in corners)
         if (dLeft < wallMargin) {
@@ -434,9 +726,20 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
           }
         }
 
-        // (3) trail following (reduced near walls to prevent corner traps)
+        // (3) trail following (reduced near walls and when close to resources)
         let trailStrength = resourceVisible ? CONFIG.aiTrailFollowingNear
                                              : CONFIG.aiTrailFollowingFar;
+        
+        // Reduce trail following when very close to resource (direct pursuit mode)
+        if (resource && resourceVisible) {
+          const dist = Math.hypot(resource.x - this.x, resource.y - this.y);
+          const closeRange = (resource.r || 15) + this.size / 2 + 30;
+          if (dist < closeRange) {
+            // Reduce trail following when close to resource (0% when at collection range)
+            const proximityFactor = Math.max(0, dist / closeRange);
+            trailStrength *= proximityFactor * proximityFactor; // Quadratic falloff
+          }
+        }
         
         // Reduce trail following when near walls to avoid corner death spirals
         const dMin = Math.min(dLeft, dRight, dTop, dBottom);
@@ -444,7 +747,7 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
           const wallProximity = 1 - (dMin / wallMargin); // 0 = far, 1 = at wall
           trailStrength *= (1 - wallProximity * 0.7); // Reduce up to 70% when at wall
         }
-        
+
         if (trailStrength > 0) {
           const sampleDist = CONFIG.aiSampleDistance;
           let sumX = 0, sumY = 0, wsum = 0;
@@ -466,13 +769,81 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
             }
           }
         }
+
+        if (resourceBias > 0 && this.hunger >= CONFIG.hungerThresholdHigh) {
+          const grad = signals.resource?.gradient;
+          if (grad && (grad.dx !== 0 || grad.dy !== 0)) {
+            const pull = resourceBias * SIGNAL_RESOURCE_PULL_GAIN * resourceWeight;
+            if (pull > 0) {
+              dx += grad.dx * pull;
+              dy += grad.dy * pull;
+              SignalResponseAnalytics.logResponse('resource', globalTick, this.id, {
+                alignment: Math.min(1, grad.mag),
+                magnitude: pull,
+                mode: 'gradient-pull'
+              });
+            }
+          }
+        }
+
+        // (3.5) Link guidance and spring (when no resource visible)
+        if (!resourceVisible) {
+          const h = clamp(this.hunger, 0, 1);
+          // Escape factor grows as hunger exceeds high threshold
+          const escape = (function(th, hv){
+            const t0 = th; // hungerThresholdHigh from config
+            const x = Math.max(0, hv - t0) / Math.max(1e-6, 1 - t0);
+            return Math.min(1, x * x); // quadratic ramp for decisiveness
+          })(CONFIG.hungerThresholdHigh, h);
+          const hungerDamp = 1 - CONFIG.link.hungerEscape * escape;
+          const conflictGain = SIGNAL_BOND_CONFLICT_DAMP * bondWeight;
+          const conflictDamp = 1 - bondConflict * conflictGain;
+          if (bondConflict > 1e-3 && conflictGain !== 0) {
+            const dampAmount = clamp(1 - conflictDamp, 0, 1);
+            if (dampAmount > 0) {
+              SignalResponseAnalytics.logResponse('bond', globalTick, this.id, {
+                alignment: dampAmount,
+                magnitude: dampAmount,
+                mode: 'bond-damp'
+              });
+            }
+          }
+          const damp = Math.max(0, hungerDamp * conflictDamp);
+          const myLinks = linksForAgent(this.id);
+          for (const L of myLinks) {
+            const other = getBundleById(otherId(L, this.id));
+            if (!other) continue;
+            const vx = other.x - this.x, vy = other.y - this.y;
+            const len = Math.hypot(vx, vy) || 1;
+            const w = CONFIG.link.guidanceGain * L.strength * damp;
+            dx += (vx / len) * w;
+            dy += (vy / len) * w;
+            // Springy geometry around rest length
+            const k = CONFIG.link.springK * L.strength * damp;
+            const delta = len - L.restLen;
+            const f = k * delta;
+            dx += (vx / len) * f;
+            dy += (vy / len) * f;
+          }
+        }
   
-        // (4) exploration noise scales with frustration AND hunger
+        // (4) exploration noise scales with frustration AND hunger (+bereavement)
         const f = clamp(this.frustration, 0, 1);
         const h = clamp(this.hunger, 0, 1);
         // Hunger amplifies exploration - hungry agents explore more desperately
         const hungerAmp = 1 + (CONFIG.hungerExplorationAmp - 1) * h;
-        const noise = (CONFIG.aiExploreNoiseBase + CONFIG.aiExploreNoiseGain * f) * hungerAmp;
+        const bereaveMul = 1 + (this.bereavementBoostTicks > 0 ? (CONFIG.bondLoss?.onDeathExploreBoost ?? 0) : 0);
+        const distressGain = SIGNAL_DISTRESS_NOISE_GAIN * distressWeight;
+        const distressMul = 1 + distressBias * distressGain;
+        if (distressBias > 1e-3 && distressGain !== 0) {
+          SignalResponseAnalytics.logResponse('distress', globalTick, this.id, {
+            alignment: Math.min(1, distressBias * Math.abs(distressGain)),
+            magnitude: Math.max(0, distressMul - 1),
+            mode: 'exploration-noise'
+          });
+        }
+        const baseNoise = (CONFIG.aiExploreNoiseBase + CONFIG.aiExploreNoiseGain * f) * hungerAmp * bereaveMul;
+        const noise = baseNoise * distressMul;
         dx += (Math.random() - 0.5) * noise * (resourceVisible ? 1.0 : 1.8);
         dy += (Math.random() - 0.5) * noise * (resourceVisible ? 1.0 : 1.8);
   
@@ -486,10 +857,13 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
   
       update(dt, resource) {
         if (!this.alive) return;
-  
+
         // Base metabolism + sensing costs
         let chiSpend = CONFIG.baseDecayPerSecond * dt;
         chiSpend += this.computeSensoryRange(dt);
+
+        // Refresh signal perception once per tick before decisions
+        this.captureSignalContext();
 
         // Update hunger (biological drive)
         this.updateHunger(dt);
@@ -519,8 +893,8 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
   
           // Stay inside viewport
           const half = this.size / 2;
-          this.x = clamp(this.x, half, innerWidth - half);
-          this.y = clamp(this.y, half, innerHeight - half);
+          this.x = clamp(this.x, half, canvasWidth - half);
+          this.y = clamp(this.y, half, canvasHeight - half);
   
           // Deposit trail when moving
           if (movedDist > 0) {
@@ -566,7 +940,162 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
           // Track death for decay system
           this.deathTick = globalTick;
           this.chiAtDeath = 0; // Already spent all chi
+          // Signal bonded survivors and remove dead links immediately
+          provokeBondedExploration(this.id);
         }
+
+        // Decay bereavement boost (per tick)
+        if (this.bereavementBoostTicks > 0) this.bereavementBoostTicks--;
+      }
+
+      emitSignal(channel, amount, options = {}) {
+        if (!CONFIG.signal?.enabled) return;
+        if (!SignalField || typeof SignalField.deposit !== 'function') return;
+        const channelIndex = SIGNAL_CHANNELS[channel];
+        if (channelIndex === undefined) return;
+
+        const cap = Number.isFinite(options.cap) ? options.cap : 1;
+        const normalized = clamp(amount, 0, cap);
+        if (normalized <= 0) return;
+
+        if (!this.signal_profile[channel]) {
+          this.signal_profile[channel] = { tick: -1, amplitude: 0 };
+        }
+        const profile = this.signal_profile[channel];
+        if (profile.tick !== globalTick) {
+          profile.tick = globalTick;
+          profile.amplitude = 0;
+        }
+
+        const absolute = options.absolute === true;
+        const target = absolute ? normalized : Math.min(cap, profile.amplitude + normalized);
+        const delta = target - profile.amplitude;
+        if (delta <= 0) return;
+
+        profile.amplitude = target;
+        const px = Number.isFinite(options.x) ? options.x : this.x;
+        const py = Number.isFinite(options.y) ? options.y : this.y;
+        SignalField.deposit(px, py, delta, channelIndex);
+      }
+
+      recordSignalSample(channel, amplitude) {
+        if (!this.signal_memory[channel]) {
+          this.signal_memory[channel] = {
+            values: new Array(SIGNAL_MEMORY_LENGTH).fill(0),
+            index: 0,
+            sum: 0
+          };
+        }
+        const buffer = this.signal_memory[channel];
+        const len = buffer.values.length;
+        if (len === 0) return;
+        const idx = buffer.index % len;
+        const prev = buffer.values[idx];
+        buffer.sum -= prev;
+        const clamped = clamp(amplitude ?? 0, 0, 1);
+        buffer.values[idx] = clamped;
+        buffer.sum += clamped;
+        buffer.index = (idx + 1) % len;
+      }
+
+      getSignalAverage(channel) {
+        const buffer = this.signal_memory?.[channel];
+        if (!buffer || !buffer.values.length) return 0;
+        return buffer.sum / buffer.values.length;
+      }
+
+      captureSignalContext(force = false) {
+        if (!force && this._signalContextTick === globalTick) {
+          return this.signalContext;
+        }
+
+        if (!CONFIG.signal?.enabled || !SignalField || typeof SignalField.sample !== 'function') {
+          this.signalContext = {};
+          this._signalContextTick = globalTick;
+          for (const key of Object.keys(this.interpretation_bias)) {
+            this.interpretation_bias[key] = 0;
+          }
+          return this.signalContext;
+        }
+
+        const context = {};
+        const sampleRadius = Math.max(4, (SignalField.cell || CONFIG.signal.cell || 8));
+        const activationThreshold = getSignalActivationThreshold();
+        for (const [name, index] of Object.entries(SIGNAL_CHANNELS)) {
+          const rawAmp = clamp(SignalField.sample(this.x, this.y, index) || 0, 0, 1);
+          const sensitivity = getSignalSensitivity(name);
+          const amp = clamp(rawAmp * sensitivity, 0, 1);
+          this.recordSignalSample(name, amp);
+          const gradient = this.computeSignalGradient(index, sampleRadius, sensitivity);
+          if (amp >= activationThreshold || (gradient?.mag ?? 0) >= activationThreshold) {
+            SignalResponseAnalytics.logStimulus(name, globalTick, this.id, {
+              amplitude: amp,
+              gradient: gradient?.mag ?? 0
+            });
+          }
+          context[name] = { amplitude: amp, gradient };
+        }
+
+        this.signalContext = context;
+        this._signalContextTick = globalTick;
+        this.updateInterpretationBias(context);
+        return context;
+      }
+
+      computeSignalGradient(channelIndex, radius, gain = 1) {
+        if (!CONFIG.signal?.enabled || !SignalField || typeof SignalField.sample !== 'function') {
+          return { dx: 0, dy: 0, mag: 0 };
+        }
+        const step = Math.max(1, radius || 1);
+        const cx = this.x;
+        const cy = this.y;
+        const sample = (px, py) => clamp(SignalField.sample(px, py, channelIndex) || 0, 0, 1);
+        const left = sample(cx - step, cy);
+        const right = sample(cx + step, cy);
+        const up = sample(cx, cy - step);
+        const down = sample(cx, cy + step);
+        const gradX = (right - left) * 0.5;
+        const gradY = (down - up) * 0.5;
+        const mag = Math.hypot(gradX, gradY);
+        if (mag <= 1e-6) {
+          return { dx: 0, dy: 0, mag: 0 };
+        }
+        const norm = Math.min(1, mag);
+        const scaledMag = Math.min(1, norm * Math.max(0, gain));
+        return { dx: gradX / mag, dy: gradY / mag, mag: scaledMag };
+      }
+
+      updateInterpretationBias(context = this.signalContext) {
+        const applyBias = (channel, target) => {
+          const prev = clamp(this.interpretation_bias[channel] ?? 0, 0, 1);
+          const decay = getSignalDecayRate(channel);
+          const decayed = prev * (1 - decay);
+          const next = target >= prev ? target : Math.max(target, decayed);
+          this.interpretation_bias[channel] = clamp(next, 0, 1);
+        };
+
+        const distressAmp = clamp(context?.distress?.amplitude ?? 0, 0, 1);
+        applyBias('distress', distressAmp);
+
+        const resourceGrad = context?.resource?.gradient;
+        let resourceTarget = 0;
+        if (resourceGrad && this.hunger >= CONFIG.hungerThresholdHigh) {
+          const hungerSpan = Math.max(1e-6, 1 - CONFIG.hungerThresholdHigh);
+          const hungerFactor = clamp((this.hunger - CONFIG.hungerThresholdHigh) / hungerSpan, 0, 1);
+          resourceTarget = clamp(resourceGrad.mag * hungerFactor, 0, 1);
+        }
+        applyBias('resource', resourceTarget);
+
+        const bondGrad = context?.bond?.gradient;
+        let bondTarget = 0;
+        if (bondGrad) {
+          const dirX = this._lastDirX;
+          const dirY = this._lastDirY;
+          const dot = dirX * bondGrad.dx + dirY * bondGrad.dy;
+          const conflict = Math.max(0, -dot) * bondGrad.mag;
+          bondTarget = clamp(conflict, 0, 1);
+        }
+        applyBias('bond', bondTarget);
       }
 
       updateHunger(dt) {
@@ -594,6 +1123,7 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
 
       updateHeuristicMovement(dt, resource) {
         // Steering (manual only for agent 1 in MANUAL mode)
+        this.captureSignalContext();
         let want = { dx: 0, dy: 0 };
         if (CONFIG.autoMove || this.id !== 1) {
           want = this.computeAIDirection(resource);
@@ -653,13 +1183,15 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
           ctx.restore();
         }
 
-        // Controller indicator - glowing border when using policy
+        // Controller indicator - glowing circular border when using policy
         if (this.useController && this.controller && this.alive) {
           ctx.save();
           ctx.strokeStyle = "#ffff00"; // yellow for controller
           ctx.globalAlpha = 0.6 + Math.sin(globalTick * 0.2) * 0.3;
           ctx.lineWidth = 3;
-          ctx.strokeRect(this.x - this.size/2 - 3, this.y - this.size/2 - 3, this.size + 6, this.size + 6);
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.size/2 + 3, 0, Math.PI * 2);
+          ctx.stroke();
           ctx.restore();
         }
 
@@ -688,7 +1220,7 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
           ctx.restore();
         }
 
-        // body (with decay effects if dead)
+        // body (with decay effects if dead) - draw as circle
         ctx.save();
         
         // Apply decay visual effects
@@ -707,8 +1239,10 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
         // Shrink size as it decays
         const decayScale = this.alive ? 1.0 : (1.0 - this.decayProgress * 0.6); // Shrink to 40% of original
         const effectiveSize = this.size * decayScale;
-        const half = effectiveSize / 2;
-        ctx.fillRect(this.x - half, this.y - half, effectiveSize, effectiveSize);
+        const radius = effectiveSize / 2;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, radius, 0, Math.PI * 2);
+        ctx.fill();
         
         ctx.restore();
         
@@ -777,8 +1311,8 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
 
         // Stay inside viewport
         const half = this.size / 2;
-        this.x = clamp(this.x, half, innerWidth - half);
-        this.y = clamp(this.y, half, innerHeight - half);
+        this.x = clamp(this.x, half, canvasWidth - half);
+        this.y = clamp(this.y, half, canvasHeight - half);
 
         // Apply sensing action
         this.extendedSensing = action.senseFrac > 0.5;
@@ -788,10 +1322,12 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
           const health = clamp(this.chi / 20, 0.2, 1.0);
           const dep = CONFIG.depositPerSec * health * dt;
           Trail.deposit(this.x, this.y, dep, this.id);
-          Trail.deposit(this.x - half, this.y - half, dep * 0.25, this.id);
-          Trail.deposit(this.x + half, this.y - half, dep * 0.25, this.id);
-          Trail.deposit(this.x - half, this.y + half, dep * 0.25, this.id);
-          Trail.deposit(this.x + half, this.y + half, dep * 0.25, this.id);
+          // Add subtle radial deposits around the circle for visibility
+          const ringR = radius * 0.7;
+          for (let k = 0; k < 4; k++) {
+            const ang = (k * Math.PI) / 2;
+            Trail.deposit(this.x + Math.cos(ang) * ringR, this.y + Math.sin(ang) * ringR, dep * 0.25, this.id);
+          }
         }
 
         // Residual χ reuse
@@ -902,6 +1438,11 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
 
         World.bundles.push(child);
         World.totalBirths++;
+        
+        // Create lineage link
+        if (CONFIG.mitosis.showLineage) {
+          World.addLineageLink(this.id, childId, globalTick);
+        }
 
         console.log(`🧫 ${eventLabel}! Agent ${this.id} (gen ${this.generation}) → Agent ${child.id} (gen ${child.generation}) | Pop: ${World.bundles.length}`);
 
@@ -923,8 +1464,8 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
 
         const offset = CONFIG.mitosis.spawnOffset;
         const half = this.size / 2;
-        const childX = clamp(this.x + Math.cos(angle) * offset, half, innerWidth - half);
-        const childY = clamp(this.y + Math.sin(angle) * offset, half, innerHeight - half);
+        const childX = clamp(this.x + Math.cos(angle) * offset, half, canvasWidth - half);
+        const childY = clamp(this.y + Math.sin(angle) * offset, half, canvasHeight - half);
 
         const child = this.spawnChild(
           childX,
@@ -952,8 +1493,8 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
 
         const jitter = CONFIG.mitosis.buddingOffset ?? 20;
         const half = this.size / 2;
-        const childX = clamp(this.x + randomRange(-jitter, jitter), half, innerWidth - half);
-        const childY = clamp(this.y + randomRange(-jitter, jitter), half, innerHeight - half);
+        const childX = clamp(this.x + randomRange(-jitter, jitter), half, canvasWidth - half);
+        const childY = clamp(this.y + randomRange(-jitter, jitter), half, canvasHeight - half);
 
         const angle = CONFIG.mitosis.inheritHeading
           ? this.heading
@@ -1027,9 +1568,17 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
         this.y = y; 
         this.r = r; 
         this.age = 0; // Ticks since spawn (for visualization)
+        this.cooldownEnd = -1; // Tick when cooldown expires (-1 = not on cooldown)
+        this.visible = true; // Whether resource is visible/collectable
+        // Consumable scent parameters (per-resource)
+        this.scentStrength = CONFIG.scentGradient.strength;
+        this.scentRange = CONFIG.scentGradient.maxRange;
       }
       
       draw(ctx) {
+        // Don't draw if on cooldown (invisible)
+        if (!this.visible) return;
+        
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.r, 0, Math.PI*2);
         
@@ -1054,12 +1603,33 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
           ctx.stroke();
           ctx.restore();
         }
+
+        // Subtle scent gradient indicator
+        if (CONFIG.scentGradient.enabled && CONFIG.scentGradient.showSubtleIndicator) {
+          const pulse = (Math.sin(globalTick * 0.05) + 1) / 2; // 0..1
+
+          ctx.save();
+          ctx.strokeStyle = `rgba(0, 255, 136, ${0.1 + pulse * 0.2})`;
+          ctx.lineWidth = 1;
+
+          // Ring 1
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.r + 10 + pulse * 10, 0, Math.PI * 2);
+          ctx.stroke();
+
+          // Ring 2
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.r + 30 + pulse * 20, 0, Math.PI * 2);
+          ctx.stroke();
+
+          ctx.restore();
+        }
       }
       
       respawn() {
         // Use fertility-based spawning if plant ecology enabled
         if (CONFIG.plantEcology.enabled && FertilityField) {
-          const location = getResourceSpawnLocation(FertilityField, innerWidth, innerHeight);
+          const location = getResourceSpawnLocation(FertilityField, canvasWidth, canvasHeight);
           this.x = location.x;
           this.y = location.y;
         } else {
@@ -1070,10 +1640,38 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
         }
         
         this.age = 0;
+        this.visible = true;
+        this.cooldownEnd = -1;
+        // Reset scent gradient on respawn
+        this.scentStrength = CONFIG.scentGradient.strength;
+        this.scentRange = CONFIG.scentGradient.maxRange;
+      }
+      
+      /**
+       * Start cooldown after collection
+       */
+      startCooldown() {
+        this.cooldownEnd = globalTick + CONFIG.resourceRespawnCooldown;
+        this.visible = false; // Hide resource during cooldown
+      }
+      
+      /**
+       * Check if cooldown has expired and respawn if ready
+       */
+      updateCooldown() {
+        if (this.cooldownEnd > 0 && globalTick >= this.cooldownEnd) {
+          // Cooldown expired, respawn
+          this.respawn();
+          // Update Z position to terrain height if terrain enabled
+          if (typeof getTerrainHeight === 'function') {
+            this.z = getTerrainHeight(this.x, this.y);
+          }
+        }
       }
       
       update(dt) {
         this.age++;
+        this.updateCooldown();
       }
     }
   
@@ -1087,6 +1685,7 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
       // Mitosis tracking
       nextAgentId: 5,  // Start at 5 (after initial 4 agents: 1-4)
       totalBirths: 0,  // Count of all mitosis events
+      lineageLinks: [], // Array of {parentId, childId, birthTick} for visual lineage tracking
       
       // === Resource Ecology (carrying capacity model) ===
       carryingCapacity: 0,           // Current max resources (starts high, declines to stable)
@@ -1105,14 +1704,19 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
       
       reset() {
         Trail.clear();
+        SignalField.clear();
+        SignalResponseAnalytics.reset();
         globalTick = 0;
         Ledger.credits = {};
+        // Clear all links on reset
+        Links.length = 0;
         
         // Reset mitosis tracking
         this.nextAgentId = 5;
         this.totalBirths = 0;
+        this.lineageLinks = [];
         
-        const cx = innerWidth / 2, cy = innerHeight / 2;
+        const cx = canvasWidth / 2, cy = canvasHeight / 2;
         this.bundles = [
           new Bundle(cx - 100, cy - 80, CONFIG.bundleSize, CONFIG.startChi, 1),
           new Bundle(cx + 100, cy + 80, CONFIG.bundleSize, CONFIG.startChi, 2),
@@ -1170,18 +1774,48 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
         this.lastFindTimestamp = performance.now() / 1000;
       },
       
-      // Helper function to get nearest resource to a bundle
-      getNearestResource(bundle) {
-        if (this.resources.length === 0) return null;
+      // Add lineage link when mitosis occurs
+      addLineageLink(parentId, childId, birthTick) {
+        this.lineageLinks.push({
+          parentId: parentId,
+          childId: childId,
+          birthTick: birthTick
+        });
+      },
+      
+      // Clean up lineage links (remove expired or invalid links)
+      cleanupLineageLinks() {
+        if (!CONFIG.mitosis.showLineage) return;
         
-        let nearest = this.resources[0];
+        const maxAge = CONFIG.mitosis.lineageFadeDuration || 600;
+        const now = globalTick;
+        
+        // Filter out expired links and links where parent or child no longer exists
+        this.lineageLinks = this.lineageLinks.filter(link => {
+          const age = now - link.birthTick;
+          if (age > maxAge) return false; // Link expired
+          
+          // Check if parent and child still exist
+          const parent = this.bundles.find(b => b.id === link.parentId);
+          const child = this.bundles.find(b => b.id === link.childId);
+          
+          return parent && child; // Keep link if both exist
+        });
+      },
+      
+      // Helper function to get nearest resource to a bundle (only visible resources)
+      getNearestResource(bundle) {
+        const visibleResources = this.resources.filter(res => res.visible);
+        if (visibleResources.length === 0) return null;
+        
+        let nearest = visibleResources[0];
         let minDist = Math.hypot(bundle.x - nearest.x, bundle.y - nearest.y);
         
-        for (let i = 1; i < this.resources.length; i++) {
-          const dist = Math.hypot(bundle.x - this.resources[i].x, bundle.y - this.resources[i].y);
+        for (let i = 1; i < visibleResources.length; i++) {
+          const dist = Math.hypot(bundle.x - visibleResources[i].x, bundle.y - visibleResources[i].y);
           if (dist < minDist) {
             minDist = dist;
-            nearest = this.resources[i];
+            nearest = visibleResources[i];
           }
         }
         
@@ -1223,7 +1857,7 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
             this.resources.length < this.carryingCapacity) {
           const spawnChance = CONFIG.resourceRecoveryChance * dt;
           if (Math.random() < spawnChance) {
-            const cx = innerWidth / 2, cy = innerHeight / 2;
+            const cx = canvasWidth / 2, cy = canvasHeight / 2;
             const res = new Resource(cx, cy, CONFIG.resourceRadius);
             res.respawn();
             this.resources.push(res);
@@ -1250,104 +1884,121 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
     };
     World.reset();
   
-    // ---------- HUD ----------
-    function drawHUD() {
-      if (!CONFIG.hud.show) return;
-      ctx.save();
-      ctx.font = "12px ui-mono, monospace";
-  
-      const bar = (x,y,w,h,f,color)=>{
-        ctx.save();
-        ctx.strokeStyle = "#444"; ctx.strokeRect(x,y,w,h);
-        ctx.fillStyle = color; ctx.fillRect(x,y, w*clamp(f,0,1), h);
-        ctx.restore();
-      };
-
-      // HUD Header with bar legend
-      ctx.fillStyle = "#888";
-      ctx.font = "10px ui-mono, monospace";
-      ctx.fillText("Frustration │ Hunger", 145, 12);
-      ctx.font = "12px ui-mono, monospace";
-
-      // Agent 1
-      const b1 = World.bundles[0];
-      ctx.fillStyle = "#00ffff";
-      let controller1 = b1.useController && b1.controller 
-        ? (loadedPolicyInfo ? `🤖 ${loadedPolicyInfo.filename.replace('.json', '').substring(0, 12)}` 
-                            : (b1.controller.constructor.name === "LinearPolicyController" ? "🤖 POLICY" : "🎮 CTRL"))
-        : "🧠 AI";
-      const vis1 = b1.visible ? "👁" : "🚫";
-      ctx.fillText(
-        `${vis1} A1[1]: χ${b1.chi.toFixed(1)} ${b1.alive ? "✓" : "✗"} sense:${Math.round(b1.currentSensoryRange)} ${controller1} cr:${Ledger.getCredits(1).toFixed(1)}`,
-        10, 18
-      );
-      bar(10, 22, 60, 4, b1.frustration, "#ff5555");
-      bar(73, 22, 60, 4, b1.hunger, "#ff8800");
-
-      // Agent 2
-      const b2 = World.bundles[1];
-      ctx.fillStyle = "#ff00ff";
-      const controller2 = b2.useController && b2.controller 
-        ? (b2.controller.constructor.name === "LinearPolicyController" ? "🤖 POLICY" : "🎮 CTRL")
-        : "🧠 AI";
-      const vis2 = b2.visible ? "👁" : "🚫";
-      ctx.fillText(
-        `${vis2} A2[2]: χ${b2.chi.toFixed(1)} ${b2.alive ? "✓" : "✗"} sense:${Math.round(b2.currentSensoryRange)} ${controller2} cr:${Ledger.getCredits(2).toFixed(1)}`,
-        10, 36
-      );
-      bar(10, 40, 60, 4, b2.frustration, "#ff55ff");
-      bar(73, 40, 60, 4, b2.hunger, "#ff8800");
-
-      // Agent 3
-      const b3 = World.bundles[2];
-      ctx.fillStyle = "#ffff00";
-      const controller3 = b3.useController && b3.controller 
-        ? (b3.controller.constructor.name === "LinearPolicyController" ? "🤖 POLICY" : "🎮 CTRL")
-        : "🧠 AI";
-      const vis3 = b3.visible ? "👁" : "🚫";
-      ctx.fillText(
-        `${vis3} A3[3]: χ${b3.chi.toFixed(1)} ${b3.alive ? "✓" : "✗"} sense:${Math.round(b3.currentSensoryRange)} ${controller3} cr:${Ledger.getCredits(3).toFixed(1)}`,
-        10, 54
-      );
-      bar(10, 58, 60, 4, b3.frustration, "#ffff55");
-      bar(73, 58, 60, 4, b3.hunger, "#ff8800");
-
-      // Agent 4
-      const b4 = World.bundles[3];
-      ctx.fillStyle = "#ff8800";
-      const controller4 = b4.useController && b4.controller 
-        ? (b4.controller.constructor.name === "LinearPolicyController" ? "🤖 POLICY" : "🎮 CTRL")
-        : "🧠 AI";
-      const vis4 = b4.visible ? "👁" : "🚫";
-      ctx.fillText(
-        `${vis4} A4[4]: χ${b4.chi.toFixed(1)} ${b4.alive ? "✓" : "✗"} sense:${Math.round(b4.currentSensoryRange)} ${controller4} cr:${Ledger.getCredits(4).toFixed(1)}`,
-        10, 72
-      );
-      bar(10, 76, 60, 4, b4.frustration, "#ff8855");
-      bar(73, 76, 60, 4, b4.hunger, "#ff8800");
-  
-      // Population summary (if more than 4 agents)
-      if (World.bundles.length > 4) {
-        ctx.fillStyle = "#88ffff";
-        const aliveCount = World.bundles.filter(b => b.alive).length;
-        const totalChi = World.bundles.reduce((sum, b) => sum + b.chi, 0);
-        const avgChi = totalChi / World.bundles.length;
-        ctx.fillText(`📊 Population: ${aliveCount}/${World.bundles.length} alive | Avg χ: ${avgChi.toFixed(1)} | Births: ${World.totalBirths}`, 10, 94);
+    // ---------- Lineage Visualization ----------
+    function drawLineageLinks(ctx) {
+      if (!CONFIG.mitosis.showLineage || !World.lineageLinks || World.lineageLinks.length === 0) {
+        return;
       }
       
-      // General info
-      ctx.fillStyle = "#00ff88";
-      const mode = CONFIG.autoMove ? "AUTO" : "MANUAL";
-      const diffState = CONFIG.enableDiffusion ? "ON" : "OFF";
-      const learningModeDisplay = learningMode === 'train' ? "TRAINING" : "PLAY";
-      const mitosisStatus = CONFIG.mitosis.enabled ? "ON" : "OFF";
+      const maxDistance = CONFIG.mitosis.lineageMaxDistance || 500;
+      const fadeDuration = CONFIG.mitosis.lineageFadeDuration || 600;
+      const baseOpacity = CONFIG.mitosis.lineageOpacity || 0.4;
+      const color = CONFIG.mitosis.lineageColor || "#888888";
       
-      // Resource ecology info
-      let resourceInfo = `resources: ${World.resources.length}`;
+      ctx.save();
+      ctx.strokeStyle = color;
+      
+      World.lineageLinks.forEach(link => {
+        // Find parent and child bundles
+        const parent = World.bundles.find(b => b.id === link.parentId);
+        const child = World.bundles.find(b => b.id === link.childId);
+        
+        if (!parent || !child) return; // Skip if either doesn't exist
+        
+        // Calculate distance
+        const dx = child.x - parent.x;
+        const dy = child.y - parent.y;
+        const dist = Math.hypot(dx, dy);
+        
+        // Skip if too far away
+        if (dist > maxDistance) return;
+        
+        // Calculate fade based on age
+        const age = globalTick - link.birthTick;
+        const fadeProgress = Math.min(1, age / fadeDuration);
+        const opacity = baseOpacity * (1 - fadeProgress * 0.7); // Fade to 30% of base opacity
+        
+        if (opacity < 0.05) return; // Too faded to draw
+        
+        // Draw line
+        ctx.globalAlpha = opacity;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(parent.x, parent.y);
+        ctx.lineTo(child.x, child.y);
+        ctx.stroke();
+      });
+      
+      ctx.restore();
+    }
+    
+    function getControllerBadge(bundle, index = 0) {
+      if (bundle.useController && bundle.controller) {
+        if (index === 0 && loadedPolicyInfo) {
+          return `🤖 ${loadedPolicyInfo.filename.replace('.json', '').substring(0, 12)}`;
+        }
+        return bundle.controller.constructor.name === "LinearPolicyController" ? "🤖 POLICY" : "🎮 CTRL";
+      }
+      return "🧠 AI";
+    }
+
+    // ---------- HUD ----------
+    function drawHUD() {
+      if (!CONFIG.hud.show || hudDisplayMode === 'hidden') return;
+      ctx.save();
+      
+      const baselineY = 10;
+      const padding = 14;
+      const lineHeight = 16;
+      const sectionSpacing = 10;
+      
+      // Helper function to draw status badge (horizontal layout)
+      const drawBadge = (x, y, enabled, label) => {
+        const badgeWidth = 80; // Fixed width for alignment
+        const badgeHeight = 16;
+        
+        // Badge background
+        ctx.fillStyle = enabled 
+          ? "rgba(0, 255, 136, 0.2)" 
+          : "rgba(128, 128, 128, 0.15)";
+        ctx.fillRect(x, y - 11, badgeWidth, badgeHeight);
+        
+        // Badge border
+        ctx.strokeStyle = enabled 
+          ? "rgba(0, 255, 136, 0.5)" 
+          : "rgba(128, 128, 128, 0.3)";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x, y - 11, badgeWidth, badgeHeight);
+        
+        // Check mark or cross
+        ctx.fillStyle = enabled ? "#4dffaa" : "#666";
+        ctx.font = "bold 11px ui-mono, monospace";
+        ctx.fillText(enabled ? "✓" : "✗", x + 4, y);
+        
+        // Label
+        ctx.fillStyle = enabled ? "#00ff88" : "#888";
+        ctx.font = "12px ui-mono, monospace";
+        ctx.fillText(label, x + 18, y);
+        
+        return y + badgeHeight + 3; // Return next Y position
+      };
+      
+      // Calculate metrics
+      const totalAgents = World.bundles.length;
+      const aliveCount = World.bundles.filter(b => b.alive).length;
+      const totalChi = World.bundles.reduce((sum, b) => sum + b.chi, 0);
+      const avgChi = totalAgents ? totalChi / totalAgents : 0;
+      const avgFrustration = totalAgents
+        ? World.bundles.reduce((sum, b) => sum + b.frustration, 0) / totalAgents
+        : 0;
+      const avgHunger = totalAgents
+        ? World.bundles.reduce((sum, b) => sum + b.hunger, 0) / totalAgents
+        : 0;
+
+      let resourceSummary = `${World.resources.length}`;
+      let resourceDetails = "";
       if (CONFIG.plantEcology.enabled) {
-        // Plant ecology: show resource count with dynamic limit if enabled
         if (CONFIG.resourceScaleWithAgents) {
-          const aliveCount = World.bundles.filter(b => b.alive).length;
           const spawnPressure = CONFIG.plantEcology.spawnPressure;
           const minResourceMultiplier = spawnPressure?.minResourceMultiplier ?? spawnPressure?.minSeedMultiplier ?? 1;
           const pressureMultiplier = getSpawnPressureMultiplier(aliveCount, minResourceMultiplier);
@@ -1359,46 +2010,345 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
             )
           );
           const pressurePct = Math.round((1 - pressureMultiplier) * 100);
-          resourceInfo = `🌿 resources: ${World.resources.length}/${maxResources} (${aliveCount} agents | pressure ${pressurePct}%)`;
+          resourceSummary = `${World.resources.length}/${maxResources}`;
+          resourceDetails = `pressure ${pressurePct}%`;
         } else {
-          resourceInfo = `🌿 resources: ${World.resources.length} | plants: ${World.carryingCapacity}`;
+          resourceSummary = `${World.resources.length}/${World.carryingCapacity}`;
+          resourceDetails = `cap ${World.carryingCapacity}`;
         }
       } else if (CONFIG.resourceDynamicCount) {
-        // Legacy system: show pressure
-        resourceInfo = `🌿 resources: ${World.resources.length}/${World.carryingCapacity} (pressure: ${(World.resourcePressure * 100).toFixed(0)}%)`;
+        resourceSummary = `${World.resources.length}/${World.carryingCapacity}`;
+        resourceDetails = `pressure ${(World.resourcePressure * 100).toFixed(0)}%`;
       }
-      
-      const yOffset = World.bundles.length > 4 ? 110 : 94;
-      ctx.fillText(`${mode} | ${learningModeDisplay} | collected: ${World.collected} | ${resourceInfo} | tick: ${globalTick} | diffusion: ${diffState} | mitosis: ${mitosisStatus}`, 10, yOffset);
-      
-      // Adaptive Reward Stats (if enabled)
-      const scentStatus = showScentGradient ? "ON" : "OFF";
-      const fertilityStatus = showFertility ? "ON" : "OFF";
-      let controlsY1, controlsY2, controlsY3;
-      
-      if (CONFIG.adaptiveReward?.enabled) {
-        ctx.fillStyle = "#ffaa00";
-        const nextReward = calculateAdaptiveReward(World.avgFindTime);
-        const adaptiveY = World.bundles.length > 4 ? 126 : 110;
-        ctx.fillText(
-          `Adaptive Reward: avgFind=${World.avgFindTime.toFixed(2)}s | nextReward≈${nextReward.toFixed(1)}χ | avgGiven=${World.rewardStats.avgRewardGiven.toFixed(1)}χ`,
-          10, adaptiveY
-        );
-        ctx.fillStyle = "#00ff88";
-        controlsY1 = World.bundles.length > 4 ? 142 : 126;
-        controlsY2 = World.bundles.length > 4 ? 158 : 142;
-        controlsY3 = World.bundles.length > 4 ? 174 : 158;
-        ctx.fillText(`[WASD]=move [A]=auto [S]=extSense [G]=scent(${scentStatus}) [P]=fertility(${fertilityStatus}) [M]=mitosis(${mitosisStatus}) [Space]=pause [R]=reset [C]=+5χ`, 10, controlsY1);
-        ctx.fillText(`[T]=trail [X]=clear [F]=diffuse [L]=train | [1-4]=toggle agent [V]=toggle all`, 10, controlsY2);
+
+      const hudSections = [];
+
+      // Minimal mode: compact single line
+      if (hudDisplayMode === 'minimal') {
+        hudSections.push({
+          color: "#88ffff",
+          lines: [
+            `📊 ${aliveCount}/${totalAgents}  χ:${avgChi.toFixed(1)}  🌿:${resourceSummary}  tick:${globalTick}`
+          ]
+        });
       } else {
-        controlsY1 = World.bundles.length > 4 ? 126 : 110;
-        controlsY2 = World.bundles.length > 4 ? 142 : 126;
-        ctx.fillText(`[WASD]=move [A]=auto [S]=extSense [G]=scent(${scentStatus}) [P]=fertility(${fertilityStatus}) [M]=mitosis(${mitosisStatus}) [Space]=pause [R]=reset [C]=+5χ`, 10, controlsY1);
-        ctx.fillText(`[T]=trail [X]=clear [F]=diffuse [L]=train | [1-4]=toggle agent [V]=toggle all`, 10, controlsY2);
+        // Full mode: organized sections
+        
+        // Section 1: Agent Statistics
+        hudSections.push({
+          color: "#88ffff",
+          lines: [
+            `📊 AGENTS`,
+            `   alive:   ${aliveCount}/${totalAgents}`,
+            `   avg χ:   ${avgChi.toFixed(1)}`,
+            `   births:  ${World.totalBirths}`,
+            `   avg F/H: ${Math.round(avgFrustration * 100)}% / ${Math.round(avgHunger * 100)}%`
+          ]
+        });
+
+        // Section 2: Simulation Stats
+        const simLines = [
+          `⚙️  SIMULATION`,
+          `   mode:      ${CONFIG.autoMove ? "AUTO" : "MANUAL"}`,
+          `   learning:  ${learningMode === 'train' ? "TRAINING" : "PLAY"}`,
+          `   tick:      ${globalTick}`,
+          `   χ earned:  ${World.collected}`
+        ];
+        hudSections.push({
+          color: "#00ff88",
+          lines: simLines
+        });
+
+        // Section 3: Resources
+        const resourceLines = [
+          `🌿 RESOURCES`,
+          `   count:  ${resourceSummary}`
+        ];
+        if (resourceDetails) {
+          resourceLines.push(`   ${resourceDetails}`);
+        }
+        hudSections.push({
+          color: "#ffaa00",
+          lines: resourceLines
+        });
+
+        // Section 4: Status badges (visual checkmarks) - vertical layout
+        hudSections.push({
+          type: 'badges',
+          color: "#88ddff",
+          label: "⚡ STATUS",
+          badges: [
+            { label: 'Trail', enabled: CONFIG.renderTrail },
+            { label: 'Diffusion', enabled: CONFIG.enableDiffusion },
+            { label: 'Mitosis', enabled: CONFIG.mitosis.enabled },
+            { label: 'Scent', enabled: showScentGradient },
+            { label: 'Fertility', enabled: showFertility },
+            { label: 'Dashboard', enabled: showAgentDashboard }
+          ]
+        });
       }
+
+      // Calculate HUD dimensions
+      let totalLines = 0;
+      let badgeCount = 0;
+      hudSections.forEach(section => {
+        if (section.type === 'badges') {
+          totalLines += 1; // Header line
+          badgeCount = section.badges.length;
+        } else {
+          totalLines += section.lines.length;
+        }
+      });
+      
+      // Add space for vertical badges (each badge is ~19px including spacing)
+      const badgeVerticalSpace = badgeCount * 19;
+      const hudHeight = padding * 2 + totalLines * lineHeight + (hudSections.length - 1) * sectionSpacing + badgeVerticalSpace;
+      const hudWidth = hudDisplayMode === 'minimal' ? 500 : 175;
+
+      // Draw HUD background
+      ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
+      ctx.fillRect(baselineY, baselineY, hudWidth, hudHeight);
+      ctx.strokeStyle = "rgba(0, 255, 136, 0.5)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(baselineY, baselineY, hudWidth, hudHeight);
+
+      // Draw HUD content
+      ctx.font = "13px ui-mono, monospace";
+      ctx.textAlign = "left";
+      
+      let currentY = baselineY + padding + 13;
+      
+      hudSections.forEach(section => {
+        if (section.type === 'badges') {
+          // Draw status badges section header
+          ctx.fillStyle = section.color;
+          ctx.font = "bold 13px ui-mono, monospace";
+          ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
+          ctx.shadowBlur = 2;
+          ctx.shadowOffsetX = 1;
+          ctx.shadowOffsetY = 1;
+          ctx.fillText(section.label, baselineY + padding, currentY);
+          ctx.shadowBlur = 0;
+          ctx.shadowOffsetX = 0;
+          ctx.shadowOffsetY = 0;
+          
+          currentY += lineHeight + 3;
+          
+          // Draw status badges vertically
+          const badgeX = baselineY + padding + 3;
+          section.badges.forEach(badge => {
+            currentY = drawBadge(badgeX, currentY, badge.enabled, badge.label);
+          });
+          currentY += sectionSpacing;
+        } else {
+          // Draw text lines
+          const lines = section.lines.filter(Boolean);
+          ctx.fillStyle = section.color;
+          lines.forEach((line, idx) => {
+            // Add subtle shadow for readability
+            ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
+            ctx.shadowBlur = 2;
+            ctx.shadowOffsetX = 1;
+            ctx.shadowOffsetY = 1;
+            
+            // Make section headers bold
+            if (idx === 0) {
+              ctx.font = "bold 13px ui-mono, monospace";
+            } else {
+              ctx.font = "12px ui-mono, monospace";
+            }
+            
+            ctx.fillText(line, baselineY + padding, currentY);
+            
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+            
+            currentY += lineHeight;
+          });
+          currentY += sectionSpacing;
+        }
+      });
+
+      if (showAgentDashboard) {
+        drawAgentDashboardOverlay(baselineY);
+      }
+
       ctx.restore();
     }
-  
+
+    function drawAgentDashboardOverlay(baselineY = 10) {
+      const agents = World.bundles;
+      if (!agents.length) return;
+
+      const viewWidth = canvas.width / dpr;
+      const viewHeight = canvas.height / dpr;
+      const padding = 12;
+      const rowHeight = 17; // Slightly increased for better readability
+      const headerHeight = 65; // Updated to match actual header layout
+      const rightMargin = 10; // Margin from right edge
+      
+      // Fixed column widths for aligned table layout
+      ctx.font = "12px ui-mono, monospace";
+      const colWidths = {
+        vis: 28,      // "vis/alive" - icons
+        id: 36,       // "ID"
+        chi: 62,      // "χ" with value
+        cr: 62,       // "cr" with value
+        f: 48,        // "F" with %
+        h: 48,        // "H" with %
+        sense: 60,    // "sense" with value
+        controller: 80 // "controller"
+      };
+      
+      const singleColumnWidth = Object.values(colWidths).reduce((sum, w) => sum + w, 0) + 8; // +8 for spacing
+      const maxRows = Math.max(1, Math.floor((viewHeight - padding * 2 - headerHeight) / rowHeight));
+      const maxColumns = Math.max(1, Math.floor((viewWidth - padding * 2 - rightMargin) / singleColumnWidth));
+
+      let columns = 1;
+      let rowsPerColumn = Math.ceil(agents.length / columns);
+      while (columns < maxColumns && rowsPerColumn > maxRows) {
+        columns += 1;
+        rowsPerColumn = Math.ceil(agents.length / columns);
+      }
+
+      columns = Math.max(1, Math.min(columns, maxColumns, agents.length || 1));
+      rowsPerColumn = Math.max(1, Math.ceil(agents.length / columns));
+
+      // Calculate panel width - ensure it fits all content
+      const calculatedWidth = columns * singleColumnWidth + padding * 2;
+      const maxWidth = viewWidth - rightMargin - padding; // Leave margin from right edge
+      const panelWidth = Math.min(maxWidth, calculatedWidth);
+      const panelHeight = Math.min(viewHeight - 20, headerHeight + rowsPerColumn * rowHeight + padding * 2);
+      const panelX = Math.max(padding, viewWidth - panelWidth - rightMargin);
+      const panelY = baselineY; // Aligned to same baseline as HUD
+
+      ctx.save();
+      
+      // Draw dashboard background with higher opacity
+      ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
+      ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
+      ctx.strokeStyle = "rgba(0, 255, 136, 0.6)";
+      ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
+
+      // Draw header text with shadow for readability
+      const titleY = panelY + padding + 15; // Title baseline
+      const headerRowY = titleY + 18; // Header row below title with spacing
+      
+      ctx.font = "13px ui-mono, monospace";
+      ctx.fillStyle = "#00ff88";
+      ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
+      ctx.shadowBlur = 2;
+      ctx.shadowOffsetX = 1;
+      ctx.shadowOffsetY = 1;
+      ctx.fillText(`Agent dashboard (${agents.length})`, panelX + padding, titleY);
+      
+      // Draw header row with fixed column alignment
+      ctx.font = "12px ui-mono, monospace";
+      ctx.fillStyle = "#d0ffd8";
+      
+      // Add shadow to header for readability
+      ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
+      ctx.shadowBlur = 1;
+      ctx.shadowOffsetX = 1;
+      ctx.shadowOffsetY = 1;
+      
+      const drawHeaderRow = (startX, startY) => {
+        let x = startX;
+        ctx.fillText("vis", x, startY);
+        x += colWidths.vis;
+        ctx.fillText("ID", x, startY);
+        x += colWidths.id;
+        ctx.fillText("chi", x, startY);
+        x += colWidths.chi;
+        ctx.fillText("credits", x, startY);
+        x += colWidths.cr;
+        ctx.fillText("Frust", x, startY);
+        x += colWidths.f;
+        ctx.fillText("Hunger", x, startY);
+        x += colWidths.h;
+        ctx.fillText("sense", x, startY);
+        x += colWidths.sense;
+        ctx.fillText("control", x, startY);
+      };
+      
+      // Draw header for each column
+      for (let col = 0; col < columns; col++) {
+        const headerX = panelX + padding + col * singleColumnWidth;
+        drawHeaderRow(headerX, headerRowY);
+      }
+      
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+
+      const contentY = headerRowY + 20; // Start content below header with spacing
+
+      agents.forEach((bundle, index) => {
+        const column = Math.floor(index / rowsPerColumn);
+        const row = index % rowsPerColumn;
+        const rowBaseX = panelX + padding + column * singleColumnWidth;
+        const rowY = contentY + row * rowHeight;
+        if (rowY > panelY + panelHeight - padding) return;
+
+        const aliveIcon = bundle.alive ? "✓" : "✗";
+        const visibilityIcon = bundle.visible ? "👁" : "🚫";
+        const frustrationPct = Math.round(clamp(bundle.frustration, 0, 1) * 100).toString().padStart(3, " ");
+        const hungerPct = Math.round(clamp(bundle.hunger, 0, 1) * 100).toString().padStart(3, " ");
+        const chiStr = bundle.chi.toFixed(1).padStart(5, " ");
+        const creditStr = Ledger.getCredits(bundle.id).toFixed(1).padStart(5, " ");
+        const senseStr = Math.round(bundle.currentSensoryRange || 0).toString().padStart(3, " ");
+        const controllerLabel = getControllerBadge(bundle, index); // No truncation
+        const idLabel = `A${bundle.id.toString().padStart(2, "0")}`;
+
+        ctx.fillStyle = bundle.alive ? getAgentColor(bundle.id, true) : "#777777";
+        
+        // Add text shadow for readability
+        ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
+        ctx.shadowBlur = 1;
+        ctx.shadowOffsetX = 1;
+        ctx.shadowOffsetY = 1;
+        
+        // Draw each field with fixed column alignment
+        let x = rowBaseX;
+        ctx.fillText(`${visibilityIcon}${aliveIcon}`, x, rowY);
+        x += colWidths.vis;
+        ctx.fillText(idLabel, x, rowY);
+        x += colWidths.id;
+        ctx.fillText(`χ${chiStr}`, x, rowY);
+        x += colWidths.chi;
+        ctx.fillText(`cr${creditStr}`, x, rowY);
+        x += colWidths.cr;
+        ctx.fillText(`F${frustrationPct}%`, x, rowY);
+        x += colWidths.f;
+        ctx.fillText(`H${hungerPct}%`, x, rowY);
+        x += colWidths.h;
+        ctx.fillText(`s${senseStr}`, x, rowY);
+        x += colWidths.sense;
+        ctx.fillText(controllerLabel, x, rowY);
+        
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+      });
+
+      const totalCapacity = rowsPerColumn * columns;
+      if (totalCapacity < agents.length) {
+        ctx.font = "11px ui-mono, monospace";
+        ctx.fillStyle = "#ffaa88";
+        ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
+        ctx.shadowBlur = 1;
+        ctx.shadowOffsetX = 1;
+        ctx.shadowOffsetY = 1;
+        ctx.fillText(`showing ${totalCapacity} of ${agents.length} agents`, panelX + padding, panelY + panelHeight - padding);
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+      }
+
+      ctx.restore();
+    }
+
     // ---------- Main loop ----------
     let last = performance.now();
     function loop(now) {
@@ -1408,17 +2358,81 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
       if (!World.paused) {
         try {
           Trail.captureSnapshot(); // fair residuals (prev frame)
-        
+          if (CONFIG.signal.enabled) {
+            SignalField.captureSnapshot();
+          }
+
+        // Link formation pass (cheap local heuristic)
+        for (let i = 0; i < World.bundles.length; i++) {
+          for (let j = i + 1; j < World.bundles.length; j++) {
+            const a = World.bundles[i];
+            const b = World.bundles[j];
+            if (!a.alive || !b.alive) continue;
+            tryFormLink(a, b);
+          }
+        }
+
         // Update each bundle with nearest resource
         World.bundles.forEach(b => {
           const nearestResource = World.getNearestResource(b);
           b.update(dt, nearestResource);
         });
         
+        // Link maintenance & decay, use-based strengthening
+        maintainLinks(dt);
+
         Trail.step(dt);
-        
+        if (CONFIG.signal.enabled) {
+          SignalField.step(dt);
+        }
+
+        // Trail reinforcement along active links
+        reinforceLinks(dt);
+
         // Update resource ecology (carrying capacity dynamics)
         World.updateEcology(dt);
+
+        // Consumable scent gradient: orbiting erodes, absence recovers
+        if (CONFIG.scentGradient.consumable) {
+          const orbitBand = CONFIG.scentGradient.orbitBandPx;
+          const minStrength = CONFIG.scentGradient.minStrength;
+          const minRange = CONFIG.scentGradient.minRange;
+          const baseStrength = CONFIG.scentGradient.strength;
+          const baseRange = CONFIG.scentGradient.maxRange;
+          const consumeRate = CONFIG.scentGradient.consumePerSec * dt;
+          const recoverRate = CONFIG.scentGradient.recoverPerSec * dt;
+
+          for (const res of World.resources) {
+            if (!res.visible) continue;
+            // Find nearest alive agent distance
+            let nearest = Infinity;
+            for (const b of World.bundles) {
+              if (!b.alive) continue;
+              const d = Math.hypot(res.x - b.x, res.y - b.y);
+              if (d < nearest) nearest = d;
+            }
+            // Inside orbit band (outside core radius)
+            const inner = res.r;
+            const outer = res.r + orbitBand;
+            if (nearest > inner && nearest <= outer) {
+              const t = 1 - (nearest - inner) / Math.max(1e-6, outer - inner); // 0..1 closer => bigger
+              const use = t * t; // quadratic for stronger close-in consumption
+              res.scentStrength = Math.max(minStrength, res.scentStrength - consumeRate * use);
+              // Optionally tie range to strength fraction
+              const frac = res.scentStrength / baseStrength;
+              const targetRange = Math.max(minRange, baseRange * frac);
+              // Smoothly relax toward target
+              res.scentRange += (targetRange - res.scentRange) * 0.5;
+            } else {
+              // Recover when no close orbiters
+              res.scentStrength = Math.min(baseStrength, res.scentStrength + recoverRate);
+              res.scentRange = Math.min(baseRange, res.scentRange + (baseRange - res.scentRange) * 0.1);
+            }
+          }
+        }
+        
+        // Clean up expired lineage links
+        World.cleanupLineageLinks();
 
         // Agent collision detection and separation
         if (CONFIG.enableAgentCollision) {
@@ -1450,10 +2464,10 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
                 
                 // Keep agents in bounds after collision
                 const half = a.size / 2;
-                a.x = clamp(a.x, half, innerWidth - half);
-                a.y = clamp(a.y, half, innerHeight - half);
-                b.x = clamp(b.x, half, innerWidth - half);
-                b.y = clamp(b.y, half, innerHeight - half);
+                a.x = clamp(a.x, half, canvasWidth - half);
+                a.y = clamp(a.y, half, canvasHeight - half);
+                b.x = clamp(b.x, half, canvasWidth - half);
+                b.y = clamp(b.y, half, canvasHeight - half);
               }
             }
           }
@@ -1464,8 +2478,10 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
           if (!b.alive) return;
           
           for (let res of World.resources) {
-            if (b.overlapsResource(res)) {
-              b.chi += CONFIG.rewardChi;
+            // Only collect if resource is visible (not on cooldown)
+            if (res.visible && b.overlapsResource(res)) {
+              const rewardChi = CONFIG.rewardChi;
+              b.chi += rewardChi;
               b.alive = true;
               b.lastCollectTick = globalTick;
               b.frustration = 0;
@@ -1474,15 +2490,20 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
               // Reset decay state (in case agent was dead/decaying)
               b.deathTick = -1;
               b.decayProgress = 0;
+              const rewardSignal = normalizeRewardSignal(rewardChi);
+              if (rewardSignal > 0) {
+                b.emitSignal('resource', rewardSignal, { absolute: true, x: b.x, y: b.y });
+              }
               World.collected += 1;
               World.onResourceCollected(); // Track ecology impact
-              
+
               // Deplete fertility at harvest location (plant ecology)
               if (CONFIG.plantEcology.enabled && FertilityField) {
                 FertilityField.depleteAt(res.x, res.y, globalTick);
               }
               
-              res.respawn();
+              // Start cooldown instead of immediate respawn
+              res.startCooldown();
               break; // Only collect one resource per frame
             }
           }
@@ -1575,9 +2596,27 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
           } catch (err) {
             console.error('Error in decay system:', err);
           }
-        }
+          }
 
           globalTick++;
+          if (globalTick - lastSignalStatTick >= 30) {
+            lastSignalStatTick = globalTick;
+            const fieldStats = typeof SignalField.getStats === 'function' ? SignalField.getStats() : null;
+            const responseSummary = SignalResponseAnalytics.getSummary();
+            if (window.trainingUI && typeof window.trainingUI.updateSignalStats === 'function') {
+              const snr = fieldStats?.snr ?? [];
+              const totalPower = fieldStats?.totalPower ?? [];
+              const channelCount = fieldStats?.channels ?? (SignalField.channelCount || 0);
+              window.trainingUI.updateSignalStats({
+                channelCount,
+                diversity: fieldStats?.diversity ?? 0,
+                snr,
+                totalPower,
+                coherence: responseSummary?.coherence ?? 0,
+                perChannel: responseSummary?.perChannel ?? {}
+              });
+            }
+          }
         } catch (err) {
           console.error('Critical error in main loop (tick ' + globalTick + '):', err);
           console.error('Stack trace:', err.stack);
@@ -1592,17 +2631,43 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
       if (showFertility && CONFIG.plantEcology.enabled && FertilityField) {
         FertilityField.draw(ctx);
       }
-      
+
+      if (CONFIG.signal.enabled) {
+        SignalField.draw(ctx);
+      }
       Trail.draw();
       
-      // Draw scent gradient visualization if enabled
-      if (showScentGradient && CONFIG.scentGradient.enabled) {
-        visualizeScentHeatmap(ctx, World.resources, 40);
-        visualizeScentGradient(ctx, World.resources, 80);
+      // Draw links (debug visualization)
+      (function drawLinks() {
+        if (!Links.length) return;
+        ctx.save();
+        ctx.globalAlpha = 0.6;
+        for (const L of Links) {
+          const a = getBundleById(L.aId);
+          const b = getBundleById(L.bId);
+          if (!a || !b) continue;
+          const color = getAgentColor(L.aId, true);
+          ctx.strokeStyle = color;
+          ctx.lineWidth = Math.max(1, L.strength * 2);
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+        }
+        ctx.restore();
+      })();
+      
+      // Draw lineage links (parent-child connections)
+      if (CONFIG.mitosis.showLineage) {
+        drawLineageLinks(ctx);
       }
       
-      // Draw all resources
-      World.resources.forEach(res => res.draw(ctx));
+      // Draw all resources (only visible ones)
+      World.resources.forEach(res => {
+        if (res.visible) {
+          res.draw(ctx);
+        }
+      });
       
       World.bundles.forEach(b => b.draw(ctx));
       drawHUD();
@@ -1641,7 +2706,10 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
         
         // Capture snapshot for fair trail sampling
         Trail.captureSnapshot();
-        
+        if (CONFIG.signal.enabled) {
+          SignalField.captureSnapshot();
+        }
+
         // Update BOTH agents
         let totalChiSpent = 0;
         let totalCollected = 0;
@@ -1665,7 +2733,8 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
           let collectedResource = false;
           
           for (let res of World.resources) {
-            if (bundle.alive && bundle.overlapsResource(res)) {
+            // Only collect if resource is visible (not on cooldown)
+            if (bundle.alive && res.visible && bundle.overlapsResource(res)) {
               // === Adaptive Reward Calculation ===
               let rewardChi;
               
@@ -1699,9 +2768,14 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
               // Reset decay state (in case agent was dead/decaying)
               bundle.deathTick = -1;
               bundle.decayProgress = 0;
+              const rewardSignal = normalizeRewardSignal(rewardChi);
+              if (rewardSignal > 0) {
+                bundle.emitSignal('resource', rewardSignal, { absolute: true, x: bundle.x, y: bundle.y });
+              }
               World.collected += 1;
               World.onResourceCollected(); // Track ecology impact
-              res.respawn();
+              // Start cooldown instead of immediate respawn
+              res.startCooldown();
               collectedResource = true;
               totalCollected++;
               break; // Only collect one resource per frame
@@ -1721,7 +2795,10 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
         
         // Update trail field (shared environment)
         Trail.step(dt);
-        
+        if (CONFIG.signal.enabled) {
+          SignalField.step(dt);
+        }
+
         globalTick++;
         episodeTicks++;
         
