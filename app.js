@@ -33,6 +33,7 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
     const held = new Set();
     let showScentGradient = true; // Toggle for scent gradient visualization
     let showFertility = false; // Toggle for fertility grid visualization
+    let showAgentDashboard = false; // Toggle for agent dashboard overlay
     
     window.addEventListener("keydown", (e) => {
       const k = e.key.toLowerCase();
@@ -59,9 +60,12 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
         CONFIG.mitosis.enabled = !CONFIG.mitosis.enabled; 
         console.log(`🧫 Mitosis ${CONFIG.mitosis.enabled ? "ENABLED" : "DISABLED"}`);
       } // Toggle mitosis
-      else if (e.code === "KeyP") { 
-        showFertility = !showFertility; 
+      else if (e.code === "KeyP") {
+        showFertility = !showFertility;
       } // Toggle plant/fertility visualization
+      else if (e.code === "KeyH") {
+        showAgentDashboard = !showAgentDashboard;
+      } // Toggle agent dashboard overlay
       // Toggle individual agents visibility
       else if (e.code === "Digit1") { if (World.bundles[0]) World.bundles[0].visible = !World.bundles[0].visible; }
       else if (e.code === "Digit2") { if (World.bundles[1]) World.bundles[1].visible = !World.bundles[1].visible; }
@@ -1559,56 +1563,14 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
       ctx.restore();
     }
     
-    const agentPalette = [
-      { text: "#00ffff", frustration: "#ff5555" },
-      { text: "#ff00ff", frustration: "#ff55ff" },
-      { text: "#ffff00", frustration: "#ffff55" },
-      { text: "#ff8800", frustration: "#ff8855" }
-    ];
-
-    function renderAgentRow(ctx, bundle, index, options = {}) {
-      if (!bundle) return;
-
-      const {
-        palette = agentPalette,
-        textX = 10,
-        baseTextY = 18,
-        baseBarY = 22,
-        rowSpacing = 18,
-        barWidth = 60,
-        barHeight = 4,
-        hungerBarX = 73,
-        hungerColor = "#ff8800"
-      } = options;
-
-      const paletteEntry = palette[index] || { text: getAgentColor(bundle.id, bundle.alive), frustration: "#ff5555" };
-      const textY = baseTextY + index * rowSpacing;
-      const barY = baseBarY + index * rowSpacing;
-
-      const drawBar = (x, y, width, height, value, color) => {
-        ctx.save();
-        ctx.strokeStyle = "#444";
-        ctx.strokeRect(x, y, width, height);
-        ctx.fillStyle = color;
-        ctx.fillRect(x, y, width * clamp(value, 0, 1), height);
-        ctx.restore();
-      };
-
-      ctx.fillStyle = paletteEntry.text;
-      const controllerLabel = bundle.useController && bundle.controller
-        ? (index === 0 && loadedPolicyInfo
-          ? `🤖 ${loadedPolicyInfo.filename.replace('.json', '').substring(0, 12)}`
-          : (bundle.controller.constructor.name === "LinearPolicyController" ? "🤖 POLICY" : "🎮 CTRL"))
-        : "🧠 AI";
-      const visibilityIcon = bundle.visible ? "👁" : "🚫";
-      ctx.fillText(
-        `${visibilityIcon} A${bundle.id}[${index + 1}]: χ${bundle.chi.toFixed(1)} ${bundle.alive ? "✓" : "✗"} sense:${Math.round(bundle.currentSensoryRange)} ${controllerLabel} cr:${Ledger.getCredits(bundle.id).toFixed(1)}`,
-        textX,
-        textY
-      );
-
-      drawBar(textX, barY, barWidth, barHeight, bundle.frustration, paletteEntry.frustration);
-      drawBar(hungerBarX, barY, barWidth, barHeight, bundle.hunger, hungerColor);
+    function getControllerBadge(bundle, index = 0) {
+      if (bundle.useController && bundle.controller) {
+        if (index === 0 && loadedPolicyInfo) {
+          return `🤖 ${loadedPolicyInfo.filename.replace('.json', '').substring(0, 12)}`;
+        }
+        return bundle.controller.constructor.name === "LinearPolicyController" ? "🤖 POLICY" : "🎮 CTRL";
+      }
+      return "🧠 AI";
     }
 
     // ---------- HUD ----------
@@ -1616,31 +1578,7 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
       if (!CONFIG.hud.show) return;
       ctx.save();
       ctx.font = "12px ui-mono, monospace";
-
-      // HUD Header with bar legend
-      ctx.fillStyle = "#888";
-      ctx.font = "10px ui-mono, monospace";
-      ctx.fillText("Frustration │ Hunger", 145, 12);
-      ctx.font = "12px ui-mono, monospace";
-
-      const maxDisplay = agentPalette.length;
-      const options = {
-        palette: agentPalette,
-        textX: 10,
-        baseTextY: 18,
-        baseBarY: 22,
-        rowSpacing: 18,
-        barWidth: 60,
-        barHeight: 4,
-        hungerBarX: 73,
-        hungerColor: "#ff8800"
-      };
-
-      const hasOverflow = World.bundles.length > maxDisplay;
-
-      World.bundles.slice(0, maxDisplay).forEach((bundle, index) => {
-        renderAgentRow(ctx, bundle, index, options);
-      });
+      ctx.textAlign = "left";
 
       const lineHeight = 14;
       const sectionSpacing = 6;
@@ -1663,27 +1601,21 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
       const scentStatus = showScentGradient ? "ON" : "OFF";
       const fertilityStatus = showFertility ? "ON" : "OFF";
 
-      const hudSections = [];
-
-      if (hasOverflow) {
-        const aliveCount = World.bundles.filter(b => b.alive).length;
-        const totalChi = World.bundles.reduce((sum, b) => sum + b.chi, 0);
-        const avgChi = World.bundles.length ? totalChi / World.bundles.length : 0;
-        hudSections.push({
-          label: "population",
-          color: "#88ffff",
-          lines: [
-            `📊 population ${aliveCount}/${World.bundles.length}`,
-            `${"avg χ".padEnd(10)}${avgChi.toFixed(1)}   ${"births".padEnd(10)}${World.totalBirths}`
-          ]
-        });
-      }
+      const totalAgents = World.bundles.length;
+      const aliveCount = World.bundles.filter(b => b.alive).length;
+      const totalChi = World.bundles.reduce((sum, b) => sum + b.chi, 0);
+      const avgChi = totalAgents ? totalChi / totalAgents : 0;
+      const avgFrustration = totalAgents
+        ? World.bundles.reduce((sum, b) => sum + b.frustration, 0) / totalAgents
+        : 0;
+      const avgHunger = totalAgents
+        ? World.bundles.reduce((sum, b) => sum + b.hunger, 0) / totalAgents
+        : 0;
 
       let resourceSummary = `${World.resources.length}`;
       let resourceDetails = "";
       if (CONFIG.plantEcology.enabled) {
         if (CONFIG.resourceScaleWithAgents) {
-          const aliveCount = World.bundles.filter(b => b.alive).length;
           const spawnPressure = CONFIG.plantEcology.spawnPressure;
           const minResourceMultiplier = spawnPressure?.minResourceMultiplier ?? spawnPressure?.minSeedMultiplier ?? 1;
           const pressureMultiplier = getSpawnPressureMultiplier(aliveCount, minResourceMultiplier);
@@ -1706,19 +1638,28 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
         resourceDetails = `pressure ${(World.resourcePressure * 100).toFixed(0)}%`;
       }
 
+      const hudSections = [];
+
+      hudSections.push({
+        color: "#88ffff",
+        lines: [
+          `📊 agents ${aliveCount}/${totalAgents}`,
+          `${"avg χ".padEnd(12)}${avgChi.toFixed(1)}   ${"births".padEnd(12)}${World.totalBirths}`,
+          `${"avg F/H".padEnd(12)}${Math.round(avgFrustration * 100)}% / ${Math.round(avgHunger * 100)}%`
+        ]
+      });
+
       const generalLines = [
-        `${"mode".padEnd(10)}${mode.padEnd(8)}${"learning".padEnd(10)}${learningModeDisplay.padEnd(9)}`,
-        `${"tick".padEnd(10)}${globalTick.toString().padEnd(8)}${"χ earned".padEnd(10)}${World.collected.toString().padEnd(8)}`,
-        `${"diffusion".padEnd(10)}${diffState.padEnd(4)}${"mitosis".padEnd(10)}${mitosisStatus.padEnd(4)}`
+        `${"mode".padEnd(12)}${mode.padEnd(8)}${"learning".padEnd(12)}${learningModeDisplay.padEnd(9)}`,
+        `${"tick".padEnd(12)}${globalTick.toString().padEnd(8)}${"χ earned".padEnd(12)}${World.collected.toString().padEnd(8)}`,
+        `${"diffusion".padEnd(12)}${diffState.padEnd(4)}${"mitosis".padEnd(12)}${mitosisStatus.padEnd(4)}`,
+        `${"🌿 resources".padEnd(14)}${resourceSummary}`
       ];
-      const resourceLabel = "🌿 resources";
-      generalLines.push(`${resourceLabel.padEnd(12)}${resourceSummary}`);
       if (resourceDetails) {
-        generalLines.push(`${"".padEnd(12)}${resourceDetails}`);
+        generalLines.push(`${"".padEnd(14)}${resourceDetails}`);
       }
 
       hudSections.push({
-        label: "general stats",
         color: "#00ff88",
         lines: generalLines
       });
@@ -1726,11 +1667,10 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
       if (CONFIG.adaptiveReward?.enabled) {
         const nextReward = calculateAdaptiveReward(World.avgFindTime);
         hudSections.push({
-          label: "adaptive reward",
           color: "#ffaa00",
           lines: [
-            `${"avg find".padEnd(10)}${World.avgFindTime.toFixed(2)}s`,
-            `${"next χ".padEnd(10)}≈${nextReward.toFixed(1)}   ${"avg given".padEnd(10)}${World.rewardStats.avgRewardGiven.toFixed(1)}χ`
+            `${"avg find".padEnd(12)}${World.avgFindTime.toFixed(2)}s`,
+            `${"next χ".padEnd(12)}≈${nextReward.toFixed(1)}   ${"avg given".padEnd(12)}${World.rewardStats.avgRewardGiven.toFixed(1)}χ`
           ]
         });
       }
@@ -1739,21 +1679,108 @@ import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResou
         `[WASD] move   [Space] pause   [R] reset   [C] +5χ`,
         `[A] auto   [S] extSense   [G] scent(${scentStatus})   [P] fertility(${fertilityStatus})`,
         `[M] mitosis(${mitosisStatus})   [T] trail   [X] clear   [F] diffuse   [L] train`,
-        `[1-4] agent vis   [V] toggle all`
+        `[H] agents(${showAgentDashboard ? "ON" : "OFF"})   [1-4] agent vis   [V] toggle all`
       ];
+
       hudSections.push({
-        label: "controls",
         color: "#00ff88",
         lines: controlsLines
       });
 
-      let currentY = hasOverflow ? 110 : 94;
+      let currentY = 28;
       hudSections.forEach(section => {
         currentY = writeHudLines(section, currentY);
       });
+
+      if (showAgentDashboard) {
+        drawAgentDashboardOverlay();
+      }
+
       ctx.restore();
     }
-  
+
+    function drawAgentDashboardOverlay() {
+      const agents = World.bundles;
+      if (!agents.length) return;
+
+      const viewWidth = canvas.width / dpr;
+      const viewHeight = canvas.height / dpr;
+      const padding = 12;
+      const columnWidth = 240;
+      const rowHeight = 16;
+      const headerHeight = 20;
+
+      const maxRows = Math.max(1, Math.floor((viewHeight - padding * 2 - headerHeight) / rowHeight));
+      const maxColumns = Math.max(1, Math.floor((viewWidth - padding * 2) / columnWidth));
+
+      let columns = 1;
+      let rowsPerColumn = Math.ceil(agents.length / columns);
+      while (columns < maxColumns && rowsPerColumn > maxRows) {
+        columns += 1;
+        rowsPerColumn = Math.ceil(agents.length / columns);
+      }
+
+      columns = Math.max(1, Math.min(columns, maxColumns, agents.length || 1));
+      rowsPerColumn = Math.max(1, Math.ceil(agents.length / columns));
+
+      const panelWidth = Math.min(viewWidth - 20, columns * columnWidth + padding * 2);
+      const panelHeight = Math.min(viewHeight - 20, headerHeight + rowsPerColumn * rowHeight + padding * 2);
+      const panelX = Math.max(10, viewWidth - panelWidth - 10);
+      const panelY = 10;
+
+      ctx.save();
+      ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
+      ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
+      ctx.strokeStyle = "rgba(0, 255, 136, 0.6)";
+      ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
+
+      ctx.font = "12px ui-mono, monospace";
+      ctx.fillStyle = "#00ff88";
+      ctx.fillText(`Agent dashboard (${agents.length})`, panelX + padding, panelY + padding);
+      ctx.font = "11px ui-mono, monospace";
+      ctx.fillStyle = "#d0ffd8";
+      ctx.fillText("vis/alive  ID  χ     cr    F    H    sense  controller", panelX + padding, panelY + padding + 12);
+
+      const contentY = panelY + padding + headerHeight;
+
+      agents.forEach((bundle, index) => {
+        const column = Math.floor(index / rowsPerColumn);
+        const row = index % rowsPerColumn;
+        const rowX = panelX + padding + column * columnWidth;
+        const rowY = contentY + row * rowHeight;
+        if (rowY > panelY + panelHeight - padding) return;
+
+        const aliveIcon = bundle.alive ? "✓" : "✗";
+        const visibilityIcon = bundle.visible ? "👁" : "🚫";
+        const frustrationPct = Math.round(clamp(bundle.frustration, 0, 1) * 100).toString().padStart(3, " ");
+        const hungerPct = Math.round(clamp(bundle.hunger, 0, 1) * 100).toString().padStart(3, " ");
+        const chiStr = bundle.chi.toFixed(1).padStart(5, " ");
+        const creditStr = Ledger.getCredits(bundle.id).toFixed(1).padStart(5, " ");
+        const senseStr = Math.round(bundle.currentSensoryRange || 0).toString().padStart(3, " ");
+        let controllerLabel = getControllerBadge(bundle, index);
+        if (controllerLabel.length > 18) {
+          controllerLabel = `${controllerLabel.slice(0, 17)}…`;
+        }
+        const idLabel = `A${bundle.id.toString().padStart(2, "0")}`;
+
+        ctx.fillStyle = bundle.alive ? getAgentColor(bundle.id, true) : "#777777";
+        ctx.fillText(
+          `${visibilityIcon}${aliveIcon}   ${idLabel} χ${chiStr} cr${creditStr} F${frustrationPct}% H${hungerPct}% s${senseStr}  ${controllerLabel}`,
+          rowX,
+          rowY
+        );
+      });
+
+      const totalCapacity = rowsPerColumn * columns;
+      if (totalCapacity < agents.length) {
+        ctx.font = "10px ui-mono, monospace";
+        ctx.fillStyle = "#ffaa88";
+        ctx.fillText(`showing ${totalCapacity} of ${agents.length} agents`, panelX + padding, panelY + panelHeight - padding);
+      }
+
+      ctx.restore();
+    }
+
     // ---------- Main loop ----------
     let last = performance.now();
     function loop(now) {
