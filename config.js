@@ -541,6 +541,229 @@ export const CONFIG_SCHEMA = {
     "bondLoss.onDeathBoostDuration": { label: "On-death boost duration", min: 0, max: 10000, step: 10 },
   },
 };
+
+const CONFIG_HINTS = {
+  // Metabolism
+  startChi: "Starting chi for freshly spawned agents.",
+  baseDecayPerSecond: "Passive chi leak each second.",
+  moveSpeedPxPerSec: "Maximum movement speed in pixels per second.",
+  moveCostPerSecond: "Chi spent each second while moving.",
+  rewardChi: "Chi awarded when a resource is collected.",
+
+  // Resources
+  resourceRadius: "Visual radius of each resource patch.",
+  bundleSize: "How many chi units each pickup contains.",
+  resourceDynamicCount: "Toggle adaptive resource spawning vs fixed count.",
+  resourceInitialMin: "Minimum resources spawned at boot.",
+  resourceInitialMax: "Maximum resources spawned at boot.",
+  resourceStableMin: "Lower bound once ecology stabilizes.",
+  resourceStableMax: "Upper bound once ecology stabilizes.",
+  resourceDepletionRate: "Fraction removed from patch per harvest.",
+  resourceRecoveryChance: "Chance per second a depleted patch respawns.",
+  resourceRespawnCooldown: "Ticks before a harvested spot can respawn.",
+  resourceCount: "Fixed resource count when dynamics are disabled.",
+  resourceScaleWithAgents: "Scale ecology supply based on living agents.",
+  resourceBaseAbundance: "Target resources available with few agents.",
+  resourceCompetition: "How strongly extra agents reduce resources.",
+  resourceScaleMinimum: "Floor for scaled resource count.",
+  resourceScaleMaximum: "Ceiling for scaled resource count.",
+
+  // Plant ecology
+  "plantEcology.enabled": "Enable soil fertility driven resource growth.",
+  "plantEcology.fertilityCell": "Size of each fertility grid cell in pixels.",
+  "plantEcology.initialFertility": "Average starting soil fertility level.",
+  "plantEcology.fertilityVariation": "Randomized spread of initial fertility.",
+  "plantEcology.seedChance": "Per-second chance fertile cells emit a seed.",
+  "plantEcology.seedDistance": "Maximum distance a new seed can land.",
+  "plantEcology.growthFertilityThreshold": "Minimum fertility needed for growth.",
+  "plantEcology.growthChance": "Per-second chance a fertile cell grows food.",
+  "plantEcology.patchCount": "Number of initial fertile hotspots.",
+  "plantEcology.patchRadius": "Radius of each fertile hotspot in pixels.",
+  "plantEcology.patchFertility": "Fertility boost inside hotspot centers.",
+  "plantEcology.harvestDepletion": "Fertility lost locally per harvest.",
+  "plantEcology.harvestRadius": "Radius affected by harvest depletion.",
+  "plantEcology.fertilityRecovery": "Fertility regained per second when idle.",
+  "plantEcology.maxFertility": "Cap on fertility value after recovery.",
+  "plantEcology.populationPressure": "Enable global fertility drain from crowding.",
+  "plantEcology.pressurePerAgent": "Fertility drain per agent above threshold.",
+  "plantEcology.pressureThreshold": "Agent count where pressure begins.",
+  "plantEcology.spawnPressure.startAgents": "Population before spawn pressure begins.",
+  "plantEcology.spawnPressure.maxAgents": "Population where pressure maxes out.",
+  "plantEcology.spawnPressure.minSeedMultiplier": "Minimum seed rate under pressure.",
+  "plantEcology.spawnPressure.minGrowthMultiplier": "Minimum growth rate under pressure.",
+  "plantEcology.spawnPressure.minResourceMultiplier": "Minimum abundance cap under pressure.",
+
+  // Adaptive reward
+  "adaptiveReward.enabled": "Toggle adaptive reward calculations.",
+  "adaptiveReward.gainFactor": "Scales generosity of adaptive rewards.",
+  "adaptiveReward.avgMoveFraction": "Assumed fraction of time agents spend moving.",
+  "adaptiveReward.emaAlpha": "Smoothing factor for reward EMA.",
+  "adaptiveReward.minReward": "Floor value for adaptive rewards.",
+  "adaptiveReward.maxReward": "Ceiling value for adaptive rewards.",
+  "adaptiveReward.useAbsoluteAnchor": "Anchor rewards to absolute ATP estimates.",
+  "adaptiveReward.chiPerATP": "Chi credited for each ATP molecule.",
+  "adaptiveReward.moleculesPerPatch": "Estimated molecules per food patch.",
+  "adaptiveReward.atpPerGlucose": "ATP released per glucose molecule.",
+
+  // Trails
+  trailCell: "Trail grid cell size in pixels.",
+  depositPerSec: "Trail strength deposited each second.",
+  evapPerSec: "Trail evaporation rate per second.",
+  diffusePerSec: "Trail diffusion rate per second.",
+  enableDiffusion: "Allow trail scent to spread between cells.",
+  renderTrail: "Draw trail heatmap in the simulation view.",
+  residualGainPerSec: "Chi gained per second from residual reuse.",
+  residualCapPerTick: "Max residual chi recovered per tick.",
+  trailCooldownTicks: "Ticks before leaving trail again deposits.",
+  ownTrailPenalty: "Chi penalty per second for running own trail.",
+  ownTrailGraceAge: "Ticks before own trail becomes safe again.",
+
+  // Autonomy
+  autoMove: "Start sim with agents auto-controlled.",
+  "controls.autoMove": "Toggle for manual controls auto move.",
+
+  // Sensing
+  aiSensoryRangeBase: "Baseline sensory range when chi is low.",
+  aiSensoryRangeMax: "Hard cap on sensory range.",
+  aiSenseRangePerChi: "Extra sensing range gained per chi.",
+  aiSenseBiasFromFrustr: "Bias to sensory focus from frustration.",
+  aiSenseSlewPerSec: "How fast sensing direction can slew.",
+
+  // Wall & collision
+  aiWallAvoidMargin: "Distance from walls before avoidance kicks in.",
+  aiWallAvoidStrength: "Strength of wall repulsion force.",
+  enableAgentCollision: "Enable physical separation between agents.",
+  agentCollisionPushback: "Pushback strength when agents collide.",
+
+  // Behavior
+  aiExploreNoiseBase: "Baseline randomness added to steering.",
+  aiExploreNoiseGain: "Extra noise when exploration is boosted.",
+  aiTrailFollowingNear: "Trail following weight for nearby scent.",
+  aiTrailFollowingFar: "Trail following weight for distant scent.",
+  aiSampleDistance: "Distance ahead sampled for decisions.",
+
+  // Frustration
+  aiFrustrationBuildRate: "Rate frustration accumulates per second.",
+  aiFrustrationDecayRate: "Rate frustration dissipates per second.",
+  aiFrustrationSightGrace: "Ticks frustration stays low after seeing food.",
+  aiFrustrationLowTrail: "Trail strength threshold treated as low.",
+
+  // Frustration effects
+  aiSurgeMax: "Max speed surge granted by frustration.",
+  aiTurnRateBase: "Base turning rate before modifiers.",
+  aiTurnRateGain: "Extra turn rate unlocked by frustration.",
+
+  // Hunger
+  hungerBuildRate: "Per-second hunger accumulation rate.",
+  hungerDecayOnCollect: "Fraction of hunger removed per food pickup.",
+  hungerThresholdLow: "Hunger level considered satisfied.",
+  hungerThresholdHigh: "Hunger level considered starving.",
+  hungerExplorationAmp: "Exploration boost applied when hungry.",
+  hungerFrustrationAmp: "Frustration build multiplier when hungry.",
+  hungerSenseAmp: "Sensory range boost under hunger.",
+  hungerSurgeAmp: "Speed surge boost under hunger.",
+
+  // Scent gradient
+  "scentGradient.enabled": "Enable distance-based scent fields.",
+  "scentGradient.maxRange": "Maximum distance scent can travel.",
+  "scentGradient.falloffType": "How scent strength decays with distance.",
+  "scentGradient.strength": "Base strength of scent at resources.",
+  "scentGradient.showSubtleIndicator": "Show visual rings for resources.",
+  "scentGradient.rewardEnabled": "Grant rewards for moving toward food.",
+  "scentGradient.rewardScale": "Chi gained per pixel closer to food.",
+  "scentGradient.rewardUpdateInterval": "Ticks between gradient reward checks.",
+  "scentGradient.densitySensingEnabled": "Expose nearby food density in observations.",
+  "scentGradient.densityRadiusNear": "Near-field density sampling radius.",
+  "scentGradient.densityRadiusMid": "Mid-field density sampling radius.",
+  "scentGradient.densityRadiusFar": "Far-field density sampling radius.",
+  "scentGradient.consumable": "Allow agents to deplete scent by orbiting.",
+  "scentGradient.consumePerSec": "How quickly orbiting drains scent strength.",
+  "scentGradient.recoverPerSec": "How quickly scent regenerates when idle.",
+  "scentGradient.minStrength": "Minimum scent strength floor.",
+  "scentGradient.minRange": "Minimum scent range floor in pixels.",
+  "scentGradient.orbitBandPx": "Radius band counted as orbiting a resource.",
+
+  // Mitosis
+  "mitosis.enabled": "Enable reproduction mechanics.",
+  "mitosis.enabledDuringTraining": "Allow mitosis while training policies.",
+  "mitosis.threshold": "Chi required before mitosis can trigger.",
+  "mitosis.cost": "Chi spent when reproducing.",
+  "mitosis.childStartChi": "Starting chi given to a child agent.",
+  "mitosis.cooldown": "Ticks to wait between reproduction attempts.",
+  "mitosis.maxAgents": "Absolute population cap with mitosis.",
+  "mitosis.maxAliveAgents": "Target max simultaneously alive agents.",
+  "mitosis.spawnOffset": "Distance child spawns from parent.",
+  "mitosis.inheritHeading": "Child inherits parent's heading direction.",
+  "mitosis.headingNoise": "Random heading jitter added on birth.",
+  "mitosis.buddingThreshold": "Chi needed before budding can occur.",
+  "mitosis.buddingShare": "Fraction of chi transferred to budded child.",
+  "mitosis.buddingOffset": "Jitter radius when budding spawns a child.",
+  "mitosis.buddingRespectCooldown": "Make budding obey mitosis cooldown.",
+  "mitosis.respectCarryingCapacity": "Limit reproduction based on ecology capacity.",
+  "mitosis.carryingCapacityMultiplier": "Multiplier applied to ecology carrying capacity.",
+  "mitosis.showLineage": "Render visual lineage links between kin.",
+  "mitosis.lineageMaxDistance": "Longest lineage line to draw.",
+  "mitosis.lineageFadeDuration": "Ticks before lineage lines fade away.",
+  "mitosis.lineageOpacity": "Opacity of lineage lines.",
+  "mitosis.lineageColor": "Color used for lineage lines.",
+
+  // Decay
+  "decay.enabled": "Enable decay system for dead agents.",
+  "decay.duration": "Ticks until a corpse fully decays.",
+  "decay.fertilityBoost": "Fertility returned per chi when decaying.",
+  "decay.releaseRadius": "Radius affected by released chi.",
+  "decay.visualFade": "Fade and shrink visuals during decay.",
+  "decay.removeAfterDecay": "Remove agent object once decay finishes.",
+
+  // HUD
+  "hud.show": "Show the in-sim HUD overlay.",
+  "hud.showActions": "Display raw action values for debugging.",
+
+  // Learning
+  "learning.observationDims": "Length of the observation vector.",
+  "learning.normalizeObs": "Normalize observations to [-1, 1].",
+  "learning.turnRate": "Maximum turn per step for agents.",
+  "learning.thrustScale": "Multiplier applied to thrust action.",
+  "learning.rewards.collectResource": "Reward weight for collecting food.",
+  "learning.rewards.chiGain": "Reward weight for gaining chi.",
+  "learning.rewards.chiSpend": "Penalty weight for spending chi.",
+  "learning.rewards.stuck": "Penalty weight when stuck near walls.",
+  "learning.rewards.idle": "Penalty weight for idling.",
+  "learning.rewards.explore": "Reward weight for exploring new tiles.",
+  "learning.rewards.provenanceCredit": "Reward when others reuse your trails.",
+  "learning.rewards.death": "Penalty weight applied on death.",
+  "learning.rewards.gradientClimb": "Reward weight for approaching resources.",
+  "learning.episodeLength": "Maximum ticks per training episode.",
+  "learning.terminateOnDeath": "End episode immediately upon death.",
+  "learning.populationSize": "Number of policies evaluated per generation.",
+  "learning.eliteCount": "Top performers kept each generation.",
+  "learning.mutationStdDev": "Standard deviation for mutation noise.",
+  "learning.generations": "Total optimization generations to run.",
+
+  // Rendering
+  "rendering.renderTrail": "Render simulation trails in UI layer.",
+  "rendering.hud.show": "Render HUD overlay elements.",
+
+  // Links
+  "link.radius": "Maximum distance to maintain a link.",
+  "link.formCost": "Chi cost per agent to form a link.",
+  "link.maintPerSec": "Chi drained each second to sustain a link.",
+  "link.decayPerSec": "Passive link strength loss per second.",
+  "link.strengthenPerUse": "Strength gained per second while used.",
+  "link.initStrength": "Initial link strength when created.",
+  "link.minStrength": "Minimum link strength floor.",
+  "link.guidanceGain": "Steering influence applied by links.",
+  "link.springK": "Spring constant pulling linked agents together.",
+  "link.transfer.capPerSec": "Maximum chi transferred through a link each second.",
+  "link.transfer.loss": "Fraction of chi lost during transfer.",
+  "link.trailMin": "Minimum shared trail intensity to form links.",
+  "link.hungerEscape": "How much hunger weakens link forces.",
+  "link.hungerDecayPerSec": "Extra link decay when agents are starving.",
+
+  // Bond loss
+  "bondLoss.onDeathExploreBoost": "Exploration boost after a bonded partner dies.",
+  "bondLoss.onDeathBoostDuration": "Ticks that bereavement boost lasts.",
+};
 // ===== Config Manager & Panel =====
 const PROFILES_KEY = "slime.presets.v1";
 
@@ -700,7 +923,8 @@ function buildConfigPanel(){
       const val = ConfigIO.get(path);
       const row = document.createElement("div");
       row.style.margin = "6px 0";
-      
+      const hint = CONFIG_HINTS[path];
+
       if (meta.type === "boolean") {
         // Checkbox for boolean
         row.innerHTML = `
@@ -769,7 +993,14 @@ function buildConfigPanel(){
         // Sync when number input changes (for typing)
         number.addEventListener("input", e => sync(e.target.value));
       }
-      
+
+      if (hint) {
+        row.title = hint;
+        row.querySelectorAll("label, span, input, select").forEach(el => {
+          el.title = hint;
+        });
+      }
+
       g.appendChild(row);
     }
     groupsHost.appendChild(g);
