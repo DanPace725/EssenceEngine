@@ -1,0 +1,16 @@
+{
+  "_comment": "Placeholder profile for Rule 110 universality experiments. Keeps TC plumbing disabled until ready.",
+  "tc": {
+    "_comment": "Disable by default; mode documents the intended snapshot source without activating it.",
+    "enabled": false,
+    "mode": "rule110",
+    "updateCadence": null,
+    "snapshots": {
+      "rule110": {
+        "_comment": "Manifests will conform to schemas/tc_rule110_snapshot.schema.json when enabled.",
+        "capture": false,
+        "schema": "schemas/tc_rule110_snapshot.schema.json"
+      }
+    }
+  }
+}

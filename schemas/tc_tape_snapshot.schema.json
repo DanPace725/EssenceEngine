@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://slimetest.local/schemas/tc_tape_snapshot.schema.json",
+  "title": "TC Turing Tape Snapshot",
+  "description": "Snapshot of a single-tape deterministic Turing machine state for manifest recording.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "tick",
+    "head",
+    "tape"
+  ],
+  "properties": {
+    "type": {
+      "const": "tc.turing_tape.snapshot",
+      "description": "Discriminator indicating a Turing tape snapshot payload."
+    },
+    "tick": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Simulation tick associated with the snapshot."
+    },
+    "head": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "position",
+        "state"
+      ],
+      "properties": {
+        "position": {
+          "type": "integer",
+          "description": "Current integer position of the head on the tape (0 = origin)."
+        },
+        "state": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the Turing machine control state."
+        },
+        "halted": {
+          "type": "boolean",
+          "description": "Flag indicating whether the machine is in a halting configuration."
+        },
+        "direction": {
+          "type": "string",
+          "enum": ["L", "R", "N"],
+          "description": "Last movement direction (Left, Right, or None)."
+        }
+      }
+    },
+    "tape": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Finite view of the tape contents centered around the origin index.",
+      "items": {
+        "type": ["string", "integer"],
+        "description": "Symbols emitted on the tape (commonly 0/1 or blank markers)."
+      }
+    },
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "end"
+      ],
+      "properties": {
+        "start": {
+          "type": "integer",
+          "description": "Inclusive index of the first cell represented in the tape array."
+        },
+        "end": {
+          "type": "integer",
+          "description": "Exclusive index immediately after the last cell represented in the tape array."
+        }
+      },
+      "description": "Optional bounds describing how the finite tape view maps onto the infinite tape coordinates."
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Optional annotation surfaced alongside the manifest payload.",
+      "additionalProperties": false,
+      "properties": {
+        "machineId": {
+          "type": "string",
+          "description": "Identifier of the machine configuration used to generate the snapshot."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Free-form notes for operators reviewing the manifest."
+        }
+      }
+    }
+  }
+}

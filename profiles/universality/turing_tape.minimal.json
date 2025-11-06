@@ -1,0 +1,16 @@
+{
+  "_comment": "Placeholder profile for minimal single-tape Turing machine snapshots. Inactive but documents intended toggles.",
+  "tc": {
+    "_comment": "Explicitly disabled until tape capture is ready for runtime wiring.",
+    "enabled": false,
+    "mode": "turing_tape",
+    "updateCadence": null,
+    "snapshots": {
+      "turingTape": {
+        "_comment": "Manifests will follow schemas/tc_tape_snapshot.schema.json when recording is enabled.",
+        "capture": false,
+        "schema": "schemas/tc_tape_snapshot.schema.json"
+      }
+    }
+  }
+}
