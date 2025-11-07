@@ -1110,6 +1110,10 @@ const ConfigIO = {
 // Initialize snapshots after ConfigIO is defined
 initSnapshotsOnce();
 
+if (isBrowser && typeof window !== 'undefined') {
+  window.updateParticipationStatusDisplay = updateParticipationStatusDisplay;
+}
+
 function findPathInSchema(path){
   for (const group of Object.values(CONFIG_SCHEMA)) {
     if (Object.prototype.hasOwnProperty.call(group, path)) return true;
@@ -1132,6 +1136,13 @@ function onConfigChanged() {
       const width = field.canvasWidth || window.innerWidth || 0;
       const height = field.canvasHeight || window.innerHeight || 0;
       field.resize(width, height, field.lastCtx);
+    }
+  }
+  if (typeof window !== 'undefined' && typeof window.updateParticipationStatusDisplay === 'function') {
+    try {
+      window.updateParticipationStatusDisplay(window.ParticipationManager?.state || {});
+    } catch (err) {
+      // Ignore UI update errors to avoid interrupting config flow
     }
   }
 }
@@ -1161,6 +1172,39 @@ function refreshPanelControls() {
       }
     }
   });
+}
+
+function updateParticipationStatusDisplay(state = {}) {
+  if (!isBrowser) return;
+  const wrap = document.getElementById("cfg-participation-status");
+  const stateEl = document.getElementById("cfg-participation-state");
+  const modeEl = document.getElementById("cfg-participation-mode");
+  const toggleBtn = document.getElementById("cfg-participation-toggle");
+  const enabled = Boolean(ConfigIO.get("participation.enabled"));
+  const active = enabled && Boolean(state?.isActive);
+  const mode = enabled ? (state?.mode || 'idle') : null;
+
+  if (wrap) {
+    wrap.style.borderColor = enabled ? "rgba(0,255,136,0.45)" : "rgba(64,64,64,0.6)";
+    wrap.style.background = enabled ? "rgba(0,40,32,0.55)" : "rgba(24,24,24,0.45)";
+  }
+
+  if (stateEl) {
+    stateEl.textContent = enabled ? (active ? 'ACTIVE' : 'READY') : 'DISABLED';
+    stateEl.style.color = enabled ? (active ? '#4dffaa' : '#88ddff') : '#888';
+    stateEl.style.borderColor = enabled ? 'rgba(0,255,136,0.45)' : 'rgba(96,96,96,0.5)';
+    stateEl.style.background = enabled ? 'rgba(0,0,0,0.45)' : 'rgba(0,0,0,0.25)';
+  }
+
+  if (modeEl) {
+    modeEl.textContent = mode ? mode.toUpperCase() : '—';
+    modeEl.style.opacity = enabled ? '1' : '0.45';
+  }
+
+  if (toggleBtn) {
+    toggleBtn.textContent = enabled ? 'Disable' : 'Enable';
+    toggleBtn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+  }
 }
 
 function snapshotsEqual(a, b) {
@@ -1209,6 +1253,17 @@ function buildConfigPanel(){
     <button id="cfg-collapse" title="Collapse all sections">Collapse All</button>
     <button id="cfg-close" style="margin-left:auto;">✕</button>
   </div>
+    <div id="cfg-participation-status" style="display:flex; align-items:flex-start; gap:10px; margin-bottom:8px; padding:8px; border:1px solid rgba(0,255,136,0.25); background:rgba(0,40,32,0.35); border-radius:4px;">
+      <div style="display:flex; flex-direction:column; gap:4px; flex:1; min-width:0;">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <strong style="color:#7dffca; font-size:12px; letter-spacing:0.5px;">Participation</strong>
+          <span id="cfg-participation-state" style="font-size:12px; padding:2px 6px; border-radius:3px; background:rgba(0,0,0,0.35); border:1px solid rgba(0,255,136,0.35); color:#00ff88; text-transform:uppercase;">DISABLED</span>
+          <span id="cfg-participation-mode" style="font-size:12px; color:#88ddff; text-transform:uppercase;">—</span>
+        </div>
+        <div style="font-size:11px; color:#9ad8ff; opacity:0.75;">LMB=Resource · Shift/Middle=Distress · Alt/Right=Bond</div>
+      </div>
+      <button id="cfg-participation-toggle" style="align-self:center;">Enable</button>
+    </div>
     <div id="cfg-profiles" style="display:flex; gap:6px; margin-bottom:8px;">
       <select id="cfg-profile-list" style="flex:1"></select>
       <button id="cfg-load">Load</button>
@@ -1224,6 +1279,18 @@ function buildConfigPanel(){
     <div style="opacity:.6; margin-top:10px;">[O] toggle · [1–9] quick load</div>
   `;
   document.body.appendChild(wrap);
+
+  const participationToggle = wrap.querySelector('#cfg-participation-toggle');
+  if (participationToggle) {
+    participationToggle.addEventListener('click', () => {
+      const enabled = Boolean(ConfigIO.get('participation.enabled'));
+      ConfigIO.set('participation.enabled', !enabled);
+      onConfigChanged();
+      refreshPanelControls();
+      updateDirtyDot();
+      updateParticipationStatusDisplay(window.ParticipationManager?.state || {});
+    });
+  }
 
   // groups & sliders
   const groupsHost = wrap.querySelector("#cfg-groups");
@@ -1318,7 +1385,7 @@ function buildConfigPanel(){
         row.querySelectorAll("span").forEach(el => el.setAttribute("title", hint));
         row.querySelectorAll("input").forEach(el => el.setAttribute("title", hint));
         row.querySelectorAll("select").forEach(el => el.setAttribute("title", hint));
-        
+
         // Add visual indicator that tooltip exists
         const labelSpan = row.querySelector("span");
         if (labelSpan && !labelSpan.querySelector(".hint-indicator")) {
@@ -1330,6 +1397,8 @@ function buildConfigPanel(){
     }
     groupsHost.appendChild(g);
   }
+
+  updateParticipationStatusDisplay(window.ParticipationManager?.state || {});
 
   // profiles
   const sel = wrap.querySelector("#cfg-profile-list");

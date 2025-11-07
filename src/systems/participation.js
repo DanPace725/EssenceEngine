@@ -11,6 +11,10 @@ const MIN_WAVE_INTENSITY = 1e-3;
 const DEFAULT_WAVE_INTERVAL = 0.28;
 const DEFAULT_WAVE_DISTANCE = 36;
 const DEFAULT_WAVE_GROWTH_RATE = 320;
+const MIN_FORCE_VECTOR = 1e-3;
+const FORCE_DECAY_PER_SECOND = 2.4;
+const ENERGY_DECAY_PER_SECOND = 3.2;
+const MIN_ENERGY_INTENSITY = 1e-2;
 
 const MODE_CHANNELS = {
   resource: 0,
@@ -52,6 +56,7 @@ const state = {
   activeFields: new Map(),
   pointerEmitters: new Map(),
   signalWaves: [],
+  energyBursts: new Map(),
   waveSequence: 0,
   timers: {
     elapsed: 0,
@@ -59,7 +64,16 @@ const state = {
     modeStart: 0,
     inactiveTime: 0
   },
-  lastForce: { ax: 0, ay: 0 }
+  lastForce: { ax: 0, ay: 0 },
+  forceViz: {
+    sumAx: 0,
+    sumAy: 0,
+    count: 0,
+    lastAx: 0,
+    lastAy: 0,
+    intensity: 0,
+    updatedAt: 0
+  }
 };
 
 const hooks = {
@@ -321,6 +335,12 @@ function clearActiveFieldEntries() {
   state.activeFields.clear();
   state.pointerEmitters.clear();
   resetForce(state);
+  state.forceViz.sumAx = 0;
+  state.forceViz.sumAy = 0;
+  state.forceViz.count = 0;
+  state.forceViz.lastAx = 0;
+  state.forceViz.lastAy = 0;
+  state.forceViz.intensity = 0;
 }
 
 function spawnSignalWave({
@@ -434,6 +454,118 @@ function updateSignalWaves(dt) {
   state.signalWaves = next;
 }
 
+function getActiveFieldEntries() {
+  if (!state.activeFields || state.activeFields.size === 0) {
+    return [];
+  }
+  return Array.from(state.activeFields.values());
+}
+
+function drawForceFields(ctx, config) {
+  if (!ctx) {
+    return;
+  }
+
+  const entries = getActiveFieldEntries();
+  const hasEntries = entries.length > 0;
+  const forceMag = Math.hypot(state.forceViz.lastAx, state.forceViz.lastAy);
+  const visibleForce = Math.max(forceMag, state.forceViz.intensity);
+
+  if (!hasEntries && visibleForce <= MIN_FORCE_VECTOR) {
+    return;
+  }
+
+  if (hasEntries) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const entryRaw of entries) {
+      const entry = entryRaw || {};
+      const px = toFiniteNumber(entry.x ?? entry.position?.x, NaN);
+      const py = toFiniteNumber(entry.y ?? entry.position?.y, NaN);
+      if (!Number.isFinite(px) || !Number.isFinite(py)) {
+        continue;
+      }
+      const mode = entry.mode || state.mode;
+      const modeConfig = config?.modes?.[mode] || {};
+      const radius = Math.max(0, toFiniteNumber(entry.radius ?? modeConfig.radius, 0));
+      if (!(radius > 0)) {
+        continue;
+      }
+      const strength = Math.max(0, toFiniteNumber(entry.strength ?? modeConfig.strength, 0));
+      const falloff = clamp01(strength / Math.max(radius, 1));
+      const { r, g, b } = resolveModeColor(mode, config);
+      const gradient = ctx.createRadialGradient(px, py, 0, px, py, radius);
+      const innerAlpha = Math.min(0.45, 0.18 + falloff * 0.32);
+      gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${innerAlpha})`);
+      gradient.addColorStop(0.4, `rgba(${r}, ${g}, ${b}, ${innerAlpha * 0.6})`);
+      gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(px, py, radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  if (visibleForce <= MIN_FORCE_VECTOR) {
+    return;
+  }
+
+  const origin = (() => {
+    if (state.cursor.visible && Number.isFinite(state.cursor.x) && Number.isFinite(state.cursor.y)) {
+      return { x: state.cursor.x, y: state.cursor.y };
+    }
+    if (hasEntries) {
+      const fallback = entries[entries.length - 1];
+      const fx = toFiniteNumber(fallback?.x ?? fallback?.position?.x, NaN);
+      const fy = toFiniteNumber(fallback?.y ?? fallback?.position?.y, NaN);
+      if (Number.isFinite(fx) && Number.isFinite(fy)) {
+        return { x: fx, y: fy };
+      }
+    }
+    return null;
+  })();
+
+  if (!origin) {
+    return;
+  }
+
+  const avgAx = state.forceViz.lastAx;
+  const avgAy = state.forceViz.lastAy;
+  const magnitude = Math.hypot(avgAx, avgAy);
+  if (magnitude <= MIN_FORCE_VECTOR) {
+    return;
+  }
+
+  const { r, g, b } = resolveModeColor(state.mode, config);
+  const scale = Math.min(140, 40 + visibleForce * 110);
+  const nx = avgAx / magnitude;
+  const ny = avgAy / magnitude;
+  const endX = origin.x + nx * scale;
+  const endY = origin.y + ny * scale;
+
+  ctx.save();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.85)`;
+  ctx.shadowColor = `rgba(${r}, ${g}, ${b}, 0.35)`;
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.moveTo(origin.x, origin.y);
+  ctx.lineTo(endX, endY);
+  ctx.stroke();
+
+  ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.75)`;
+  const head = 10;
+  const angle = Math.atan2(ny, nx);
+  ctx.beginPath();
+  ctx.moveTo(endX, endY);
+  ctx.lineTo(endX - Math.cos(angle - Math.PI / 6) * head, endY - Math.sin(angle - Math.PI / 6) * head);
+  ctx.lineTo(endX - Math.cos(angle + Math.PI / 6) * head, endY - Math.sin(angle + Math.PI / 6) * head);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
 function drawSignalWaves(ctx, config) {
   if (!ctx || !state.signalWaves.length) {
     return;
@@ -453,13 +585,117 @@ function drawSignalWaves(ctx, config) {
       continue;
     }
     const { r, g, b } = wave.color || MODE_COLORS.resource;
-    ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${Math.min(0.85, alpha * 0.9)})`;
-    ctx.lineWidth = 2 + alpha * 3;
+    const radius = Math.max(4, wave.radius);
+    const fillGradient = ctx.createRadialGradient(wave.x, wave.y, radius * 0.35, wave.x, wave.y, radius);
+    fillGradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${Math.min(0.4, alpha * 0.35)})`);
+    fillGradient.addColorStop(0.75, `rgba(${r}, ${g}, ${b}, ${Math.min(0.25, alpha * 0.2)})`);
+    fillGradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+    ctx.fillStyle = fillGradient;
     ctx.beginPath();
-    ctx.arc(wave.x, wave.y, Math.max(4, wave.radius), 0, Math.PI * 2);
+    ctx.arc(wave.x, wave.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${Math.min(0.85, alpha * 0.9)})`;
+    ctx.lineWidth = 1.5 + alpha * 2.5;
+    ctx.beginPath();
+    ctx.arc(wave.x, wave.y, radius, 0, Math.PI * 2);
     ctx.stroke();
   }
   ctx.restore();
+}
+
+function updateEnergyBursts(dt) {
+  if (!(dt > 0) || state.energyBursts.size === 0) {
+    return;
+  }
+
+  const decay = Math.exp(-ENERGY_DECAY_PER_SECOND * dt);
+  for (const [key, pulse] of state.energyBursts.entries()) {
+    if (!pulse) {
+      state.energyBursts.delete(key);
+      continue;
+    }
+    pulse.intensity *= decay;
+    if (!Number.isFinite(pulse.intensity) || pulse.intensity <= MIN_ENERGY_INTENSITY) {
+      state.energyBursts.delete(key);
+      continue;
+    }
+  }
+}
+
+function drawEnergyBursts(ctx) {
+  if (!ctx || state.energyBursts.size === 0) {
+    return;
+  }
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const pulse of state.energyBursts.values()) {
+    if (!pulse) continue;
+    const px = toFiniteNumber(pulse.x, NaN);
+    const py = toFiniteNumber(pulse.y, NaN);
+    if (!Number.isFinite(px) || !Number.isFinite(py)) continue;
+    const intensity = Math.max(0, toFiniteNumber(pulse.intensity, 0));
+    if (intensity <= MIN_ENERGY_INTENSITY) continue;
+    const gain = pulse.value >= 0;
+    const color = gain ? { r: 64, g: 255, b: 196 } : { r: 255, g: 120, b: 96 };
+    const radius = 18 + intensity * 60;
+    const gradient = ctx.createRadialGradient(px, py, radius * 0.35, px, py, radius);
+    gradient.addColorStop(0, `rgba(${color.r}, ${color.g}, ${color.b}, ${Math.min(0.55, 0.25 + intensity * 0.45)})`);
+    gradient.addColorStop(0.55, `rgba(${color.r}, ${color.g}, ${color.b}, ${Math.min(0.35, 0.18 + intensity * 0.3)})`);
+    gradient.addColorStop(1, `rgba(${color.r}, ${color.g}, ${color.b}, 0)`);
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(px, py, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(0.4, 0.08 + intensity * 0.35)})`;
+    ctx.beginPath();
+    ctx.arc(px, py, Math.max(4, radius * 0.25), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function registerEnergyPulse(target, maybeDelta) {
+  const payload = typeof target === 'object' && target !== null
+    ? { ...target }
+    : { bundle: target, delta: maybeDelta };
+
+  const bundle = payload.bundle || null;
+  const id = Number.isFinite(payload.id)
+    ? payload.id
+    : Number.isFinite(bundle?.id)
+      ? bundle.id
+      : null;
+  if (id === null) {
+    return null;
+  }
+
+  const px = toFiniteNumber(payload.x ?? bundle?.x, NaN);
+  const py = toFiniteNumber(payload.y ?? bundle?.y, NaN);
+  if (!Number.isFinite(px) || !Number.isFinite(py)) {
+    return null;
+  }
+
+  const delta = toFiniteNumber(payload.delta ?? maybeDelta, 0);
+  if (!Number.isFinite(delta) || delta === 0) {
+    return null;
+  }
+
+  const now = state.timers.elapsed;
+  const existing = state.energyBursts.get(id);
+  const baseIntensity = existing ? existing.intensity * 0.6 : 0;
+  const boost = Math.min(1.2, Math.max(0.12, Math.abs(delta) * 0.35 + 0.15));
+  const entry = existing || { id };
+  entry.x = px;
+  entry.y = py;
+  entry.value = delta;
+  entry.intensity = Math.max(boost, baseIntensity);
+  entry.updatedAt = now;
+  entry.createdAt = existing?.createdAt ?? now;
+  state.energyBursts.set(id, entry);
+  return entry;
 }
 
 function sampleWaveStrength({
@@ -542,7 +778,15 @@ function update(dt) {
   if (!config?.enabled && state.isActive) {
     setActive(false);
   }
+  if (delta > 0) {
+    const forceDecay = Math.exp(-FORCE_DECAY_PER_SECOND * delta);
+    state.forceViz.intensity *= forceDecay;
+  }
+  state.forceViz.sumAx = 0;
+  state.forceViz.sumAy = 0;
+  state.forceViz.count = 0;
   updateSignalWaves(delta);
+  updateEnergyBursts(delta);
   hooks.onUpdate(state, config, delta);
 }
 
@@ -657,6 +901,25 @@ function applyForce(context) {
   });
   const force = sanitizeForce(hookResult && typeof hookResult === 'object' ? hookResult : computed);
   state.lastForce = force;
+  if ((force.ax !== 0 || force.ay !== 0) && Number.isFinite(force.ax) && Number.isFinite(force.ay)) {
+    state.forceViz.sumAx += force.ax;
+    state.forceViz.sumAy += force.ay;
+    state.forceViz.count += 1;
+    const count = state.forceViz.count;
+    if (count > 0) {
+      const avgAx = state.forceViz.sumAx / count;
+      const avgAy = state.forceViz.sumAy / count;
+      state.forceViz.lastAx = avgAx;
+      state.forceViz.lastAy = avgAy;
+      const avgMag = Math.hypot(avgAx, avgAy);
+      if (avgMag > state.forceViz.intensity) {
+        state.forceViz.intensity = avgMag;
+      } else {
+        state.forceViz.intensity = Math.max(state.forceViz.intensity, avgMag * 0.85);
+      }
+      state.forceViz.updatedAt = state.timers.elapsed;
+    }
+  }
   return force;
 }
 
@@ -672,6 +935,8 @@ function sampleSignal(agentBundle) {
 
 function draw(ctx) {
   const config = getConfig();
+  drawForceFields(ctx, config);
+  drawEnergyBursts(ctx);
   drawSignalWaves(ctx, config);
   hooks.onDraw(state, config, ctx);
 }
@@ -764,6 +1029,13 @@ function resetTimers() {
   state.signalWaves = [];
   state.pointerEmitters.clear();
   state.waveSequence = 0;
+  state.energyBursts.clear();
+  state.forceViz.sumAx = 0;
+  state.forceViz.sumAy = 0;
+  state.forceViz.count = 0;
+  state.forceViz.lastAx = 0;
+  state.forceViz.lastAy = 0;
+  state.forceViz.intensity = 0;
 }
 
 const manager = {
@@ -788,6 +1060,7 @@ const manager = {
   sampleSignal,
   sampleWaveStrength,
   sampleWaveStrengths,
+  registerEnergyPulse,
   draw,
   getLastForce
 };

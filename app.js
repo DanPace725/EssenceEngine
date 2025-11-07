@@ -187,7 +187,17 @@ import { collectResource } from './src/systems/resourceSystem.js';
         return 0;
       }
 
-      return applyChiDelta({ bundle, delta, reason: 'participation-energy' });
+      const applied = applyChiDelta({ bundle, delta, reason: 'participation-energy' });
+      if (applied !== 0 && ParticipationManager && typeof ParticipationManager.registerEnergyPulse === 'function') {
+        try {
+          ParticipationManager.registerEnergyPulse({ bundle, delta: applied });
+        } catch (error) {
+          if (CONFIG?.participation?.debugLog && typeof console !== 'undefined' && console.debug) {
+            console.debug('[Participation] energy pulse error:', error);
+          }
+        }
+      }
+      return applied;
     };
 
     const resetParticipationEnergy = ({ clearFields = false } = {}) => {
@@ -201,9 +211,35 @@ import { collectResource } from './src/systems/resourceSystem.js';
       if (typeof ParticipationManager.resetTimers === 'function') {
         ParticipationManager.resetTimers();
       }
+      if (typeof updateParticipationStatusUI === 'function') {
+        updateParticipationStatusUI();
+      }
     };
 
     ParticipationManager.setConfig(getParticipationConfig);
+
+    const updateParticipationStatusUI = (stateSnapshot = null) => {
+      if (typeof window === 'undefined') {
+        return;
+      }
+      const updater = window.updateParticipationStatusDisplay;
+      if (typeof updater !== 'function') {
+        return;
+      }
+      try {
+        updater(stateSnapshot || ParticipationManager?.state || {});
+      } catch (error) {
+        if (CONFIG?.participation?.debugLog && typeof console !== 'undefined' && console.debug) {
+          console.debug('[Participation] status UI update failed:', error);
+        }
+      }
+    };
+
+    ParticipationManager.setEmitters({
+      onUpdate: (state) => {
+        updateParticipationStatusUI(state);
+      }
+    });
 
     if (typeof window !== 'undefined') {
       window.CONFIG = CONFIG;
@@ -212,6 +248,8 @@ import { collectResource } from './src/systems/resourceSystem.js';
         getModeConfig: getParticipationModeConfig,
         isEnabled: isParticipationEnabled
       };
+      window.ParticipationManager = ParticipationManager;
+      updateParticipationStatusUI();
     }
 
     // Generate color for agent based on ID (supports unlimited agents)
@@ -1484,8 +1522,23 @@ import { collectResource } from './src/systems/resourceSystem.js';
       if (CONFIG.signal.enabled) {
         SignalField.draw(ctx);
       }
-      ParticipationManager.draw(ctx);
       Trail.draw();
+
+      World.resources.forEach((res) => {
+        if (res.visible) {
+          res.draw(ctx);
+        }
+      });
+
+      if (ParticipationManager && typeof ParticipationManager.draw === 'function') {
+        try {
+          ParticipationManager.draw(ctx);
+        } catch (error) {
+          if (CONFIG?.participation?.debugLog && typeof console !== 'undefined' && console.debug) {
+            console.debug('[Participation] draw error:', error);
+          }
+        }
+      }
 
       (function drawLinks() {
         if (!Links.length) return;
@@ -1509,12 +1562,6 @@ import { collectResource } from './src/systems/resourceSystem.js';
       if (CONFIG.mitosis.showLineage) {
         drawLineageLinks(ctx);
       }
-
-      World.resources.forEach((res) => {
-        if (res.visible) {
-          res.draw(ctx);
-        }
-      });
 
       World.bundles.forEach((bundle) => bundle.draw(ctx));
 
