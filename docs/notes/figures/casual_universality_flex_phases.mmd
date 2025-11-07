@@ -1,0 +1,17 @@
+---
+title: TC Scheduler Phase Timing
+---
+sequenceDiagram
+  participant Scheduler
+  participant Stepper as Rule110 Stepper
+  participant Storage as TcStorage
+  participant Emitter as Headless Emitter
+
+  Scheduler->>Stepper: capture(ctx)
+  Stepper->>Storage: ensureState()
+  Stepper-->>Emitter: tc.rule110.snapshot payload
+  Scheduler->>Stepper: compute(ctx)
+  Stepper->>Storage: buffer updates
+  Scheduler->>Stepper: commit(ctx)
+  Stepper->>Storage: swap buffers
+  Stepper-->>Emitter: hashed frame metadata

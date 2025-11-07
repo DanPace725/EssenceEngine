@@ -1,0 +1,26 @@
+{
+  "_comment": "Profile enabling headless Rule 110 capture with deterministic TC plumbing for casual universality demos.",
+  "tc": {
+    "enabled": true,
+    "seed": 0,
+    "tickSalt": 2654435769,
+    "maxCachedChunks": 64,
+    "updateCadence": 1,
+    "mode": "rule110",
+    "snapshots": {
+      "rule110": {
+        "capture": true,
+        "schema": "schemas/tc_rule110_snapshot.schema.json"
+      },
+      "turingTape": {
+        "capture": false,
+        "schema": "schemas/tc_tape_snapshot.schema.json"
+      }
+    },
+    "machines": {
+      "unaryIncrementer": {
+        "table": "tc/machines/unary_incrementer.json"
+      }
+    }
+  }
+}

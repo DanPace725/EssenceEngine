@@ -1,0 +1,21 @@
+---
+title: Casual Universality Capture Flow
+---
+flowchart LR
+  profile(Profile: profiles/universality/casual_universality_flex.json)
+  config[TC Config\n(applyTcConfig)]
+  scheduler[TcScheduler\n(capture→compute→commit)]
+  stepper[registerRule110Stepper]
+  storage[TcStorage]
+  emitter[Headless emitter\n(tc/createHeadlessEmitter)]
+  manifest[tc.rule110.snapshot\nNDJSON stream]
+  ui[Training UI\n(trainingUI.updateSignalStats)]
+
+  profile --> config
+  config --> scheduler
+  scheduler --> stepper
+  stepper --> storage
+  stepper --> manifest
+  manifest --> emitter
+  scheduler -->|phases| emitter
+  storage --> ui

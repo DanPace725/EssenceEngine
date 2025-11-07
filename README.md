@@ -9,6 +9,7 @@ Slime-Bundle is a browser-based simulation that explores the emergent behavior o
 *   **Reinforcement Learning:** Agents can be trained using the Cross-Entropy Method (CEM) to learn effective foraging strategies.
 *   **Interactive Simulation:** A wide range of keyboard controls allow you to manipulate the simulation, toggle visualizations, and interact with the agents.
 *   **Highly Configurable:** The simulation's parameters are exposed in `config.js`, allowing you to experiment with different scenarios.
+*   **TC Snapshot Mode:** Load `profiles/universality/casual_universality_flex.json` to enable the deterministic Rule 110 runner and stream `tc.rule110.snapshot` manifests for manifest validation and headless reproductions.
 
 ## Controls
 
