@@ -1,0 +1,52 @@
+{
+  "generatedAt": "2025-11-07T00:27:48.052Z",
+  "note": "Wall time measured with performance.now(); CPU usage via process.cpuUsage(). Lower wall/cpu per step is better.",
+  "scenarios": {
+    "rule110": {
+      "description": "Width 256 ether initializer for 2000 ticks.",
+      "enabled": {
+        "steps": 2000,
+        "wallElapsedMs": 53.589,
+        "wallPerStepMs": 0.026794,
+        "fps": 37321.36,
+        "cpuUserMs": 83.453,
+        "cpuSystemMs": 26.304,
+        "cpuTotalMs": 109.757,
+        "cpuPerStepMs": 0.054879
+      },
+      "disabled": {
+        "steps": 2000,
+        "wallElapsedMs": 59.272,
+        "wallPerStepMs": 0.029636,
+        "fps": 33742.94,
+        "cpuUserMs": 93.717,
+        "cpuSystemMs": 11.462,
+        "cpuTotalMs": 105.179,
+        "cpuPerStepMs": 0.05259
+      }
+    },
+    "tapeUnary": {
+      "description": "Unary incrementer for 2000 ticks with window radius 1.",
+      "enabled": {
+        "steps": 2000,
+        "wallElapsedMs": 27.482,
+        "wallPerStepMs": 0.013741,
+        "fps": 72775.16,
+        "cpuUserMs": 61.202,
+        "cpuSystemMs": 4.424,
+        "cpuTotalMs": 65.626,
+        "cpuPerStepMs": 0.032813
+      },
+      "disabled": {
+        "steps": 2000,
+        "wallElapsedMs": 26.526,
+        "wallPerStepMs": 0.013263,
+        "fps": 75396.51,
+        "cpuUserMs": 52.773,
+        "cpuSystemMs": 7.198,
+        "cpuTotalMs": 59.971,
+        "cpuPerStepMs": 0.029986
+      }
+    }
+  }
+}
