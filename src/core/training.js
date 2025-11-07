@@ -1,4 +1,5 @@
 import { performSimulationStep } from './simulationLoop.js';
+import { collectResource } from '../systems/resourceSystem.js';
 
 export function createTrainingModule({
   world,
@@ -118,36 +119,22 @@ export function createTrainingModule({
         for (const res of world.resources) {
           if (!(bundle.alive && res.visible && bundle.overlapsResource(res))) continue;
 
-          let rewardChi;
-          if (config.adaptiveReward?.enabled) {
-            const dtFind = updateFindTimeEMA(world);
-            rewardChi = calculateAdaptiveReward(world.avgFindTime);
-            world.rewardStats.totalRewards += rewardChi;
-            world.rewardStats.avgRewardGiven = world.rewardStats.totalRewards / (world.collected + 1);
-            if (world.collected % 10 === 0 && world.collected > 0) {
-              console.log(`[Adaptive Reward] Find #${world.collected}: dt=${dtFind.toFixed(2)}s, avgT=${world.avgFindTime.toFixed(2)}s, reward=${rewardChi.toFixed(2)}χ`);
-            }
-          } else {
-            rewardChi = config.rewardChi;
-          }
+          const result = collectResource({
+            bundle,
+            resource: res,
+            world,
+            config,
+            normalizeRewardSignal,
+            updateFindTimeEMA,
+            calculateAdaptiveReward,
+            getGlobalTick,
+            logger: console,
+          });
 
-          bundle.chi += rewardChi;
-          bundle.alive = true;
-          bundle.lastCollectTick = typeof getGlobalTick === 'function' ? getGlobalTick() : 0;
-          bundle.frustration = 0;
-          bundle.hunger = Math.max(0, bundle.hunger - config.hungerDecayOnCollect);
-          bundle.deathTick = -1;
-          bundle.decayProgress = 0;
-          const rewardSignal = normalizeRewardSignal(rewardChi);
-          if (rewardSignal > 0) {
-            bundle.emitSignal('resource', rewardSignal, { absolute: true, x: bundle.x, y: bundle.y });
+          collectedResource = result.collected;
+          if (collectedResource) {
+            break;
           }
-
-          world.collected += 1;
-          world.onResourceCollected();
-          res.startCooldown();
-          collectedResource = true;
-          break;
         }
 
         const provenanceCredit = ledger.getCredits(bundle.id);

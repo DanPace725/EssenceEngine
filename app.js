@@ -38,6 +38,7 @@ import { initializeCanvasManager } from './src/ui/canvasManager.js';
 import { initializeInputManager } from './src/ui/inputManager.js';
 import { startSimulation } from './src/core/simulationLoop.js';
 import { createTrainingModule } from './src/core/training.js';
+import { collectResource } from './src/systems/resourceSystem.js';
 
 (() => {
     const canvas = document.getElementById("view");
@@ -1182,27 +1183,26 @@ import { createTrainingModule } from './src/core/training.js';
         for (const res of World.resources) {
           if (!(res.visible && bundle.overlapsResource(res))) continue;
 
-          const rewardChi = CONFIG.rewardChi;
-          bundle.chi += rewardChi;
-          bundle.alive = true;
-          bundle.lastCollectTick = globalTick;
-          bundle.frustration = 0;
-          bundle.hunger = Math.max(0, bundle.hunger - CONFIG.hungerDecayOnCollect);
-          bundle.deathTick = -1;
-          bundle.decayProgress = 0;
-          const rewardSignal = normalizeRewardSignal(rewardChi);
-          if (rewardSignal > 0) {
-            bundle.emitSignal('resource', rewardSignal, { absolute: true, x: bundle.x, y: bundle.y });
-          }
-          World.collected += 1;
-          World.onResourceCollected();
+          const result = collectResource({
+            bundle,
+            resource: res,
+            world: World,
+            config: CONFIG,
+            normalizeRewardSignal,
+            updateFindTimeEMA,
+            calculateAdaptiveReward,
+            getGlobalTick: () => globalTick,
+            logger: console,
+            onCollected: ({ resource }) => {
+              if (CONFIG.plantEcology.enabled && FertilityField) {
+                FertilityField.depleteAt(resource.x, resource.y, globalTick);
+              }
+            },
+          });
 
-          if (CONFIG.plantEcology.enabled && FertilityField) {
-            FertilityField.depleteAt(res.x, res.y, globalTick);
+          if (result.collected) {
+            break;
           }
-
-          res.startCooldown();
-          break;
         }
       });
 
