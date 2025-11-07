@@ -4,6 +4,22 @@
 // [T]=trail on/off [X]=clear trail [F]=diffusion on/off | [1-4]=toggle individual agents | [V]=toggle all | [L]=training UI
 // [H]=agent dashboard | [U]=cycle HUD (full/minimal/hidden) | [K]=toggle hotkey strip | [O]=config panel
 
+// ========================================================================
+// 📋 INITIALIZATION ORDER REQUIREMENTS FOR AI AGENTS
+// ========================================================================
+// This file has a STRICT initialization order that must be maintained:
+// 1. Imports
+// 2. Canvas & helper setup
+// 3. Trail, Links, Ledger systems
+// 4. Bundle & Resource classes (they reference World via getWorld callback)
+// 5. ⚠️  World creation (line ~521)
+// 6. ⚠️  trainingModule creation (line ~546) - REQUIRES World to exist
+// 7. Simulation loop setup
+//
+// CRITICAL: Do NOT create trainingModule before World exists!
+// CRITICAL: Do NOT move World creation after trainingModule!
+// ========================================================================
+
 import { CONFIG } from './config.js';
 import { SignalField } from './signalField.js';
 import { HeuristicController, LinearPolicyController } from './controllers.js';
@@ -476,6 +492,8 @@ import { createTrainingModule } from './src/core/training.js';
     });
 
     // ---------- Entities ----------
+    // Note: Bundle and Resource use getWorld: () => World callback pattern
+    // This allows them to be created BEFORE World while still accessing it later
     const Bundle = createBundleClass({
       Trail,
       getGlobalTick: () => globalTick,
@@ -493,7 +511,7 @@ import { createTrainingModule } from './src/core/training.js';
       provokeBondedExploration,
       getAgentColor,
       getAgentColorRGB,
-      getWorld: () => World
+      getWorld: () => World  // Callback pattern - World is referenced later when needed
     });
     const terrainHeightFn = typeof getTerrainHeight === 'function'
       ? (x, y) => getTerrainHeight(x, y)
@@ -510,6 +528,13 @@ import { createTrainingModule } from './src/core/training.js';
       getViewportHeight: () => innerHeight
     });
   
+    // ========================================================================
+    // ⚠️  CRITICAL INITIALIZATION ORDER - DO NOT REARRANGE ⚠️
+    // ========================================================================
+    // World MUST be created BEFORE trainingModule (see line ~533 below).
+    // Many other components reference World and will break if this order changes.
+    // If you're an AI agent: DO NOT move World creation after trainingModule!
+    // ========================================================================
     // ---------- World ----------
     const World = createWorld({
       Trail,
@@ -530,6 +555,12 @@ import { createTrainingModule } from './src/core/training.js';
       window.World = World;
     }
 
+    // ========================================================================
+    // ⚠️  World is NOW initialized - trainingModule can reference it safely ⚠️
+    // ========================================================================
+    // This trainingModule creation MUST happen AFTER World is created above.
+    // DO NOT move this code before World initialization!
+    // ========================================================================
     const trainingModule = createTrainingModule({
       world: World,
       config: CONFIG,
