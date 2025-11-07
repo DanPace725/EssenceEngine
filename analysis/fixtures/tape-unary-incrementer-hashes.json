@@ -1,0 +1,18 @@
+{
+  "machineId": "unaryIncrementer",
+  "description": "Unary incrementer starting on three 1 symbols and halting after appending a trailing 1.",
+  "initialTape": {
+    "cells": ["1", "1", "1"],
+    "offset": 0
+  },
+  "steps": 5,
+  "chunkSize": 32,
+  "windowRadius": 0,
+  "hashes": [
+    "d214326aa3edf2dfcc3419894f4347fcd92bfe6e4da8301ed74c77b0aa366e8c",
+    "f0c2baf1ef53d1a77e251b47d93fece4d7b45e70a88774380ebfdc94e7306503",
+    "c8ed4d86d5600c718e2b1f9110f3e81e63a66c7e7e2021ced5d16ece0dcea84a",
+    "e3fcdf3f4eac717f196691167a00386e5d4dcd66d114a60b2dce559d21fbd942",
+    "395fd65b1afc11633f5bf7c7f672376ae7f90c865e3573c9c6aca3ac6f04bc58"
+  ]
+}

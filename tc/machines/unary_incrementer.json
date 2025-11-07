@@ -1,0 +1,20 @@
+{
+  "id": "unaryIncrementer",
+  "description": "Moves right across a unary number and appends a trailing 1 before halting.",
+  "alphabet": ["_", "1"],
+  "blank": "_",
+  "initialState": "scan",
+  "haltStates": ["halt"],
+  "states": {
+    "scan": {
+      "1": { "write": "1", "move": "R", "next": "scan" },
+      "_": { "write": "1", "move": "N", "next": "halt", "halt": true }
+    },
+    "halt": {}
+  },
+  "metadata": {
+    "machineId": "unaryIncrementer",
+    "author": "SlimeTest"
+  },
+  "snapshotSchema": "schemas/tc_tape_snapshot.schema.json"
+}

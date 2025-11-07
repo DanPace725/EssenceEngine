@@ -1,7 +1,84 @@
 // Slime-Bundle Configuration
 // Organized config for physics, trails, AI, and learning
 
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { applyTcConfig } from './tcStorage.js';
+import { TapeMachineRegistry } from './tc/tcTape.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const hasFs = fs && typeof fs.readFileSync === 'function';
+
+const resolveConfigPath = (maybePath) => {
+  if (!maybePath || typeof maybePath !== 'string') return null;
+  if (path.isAbsolute(maybePath)) return maybePath;
+  return path.resolve(__dirname, maybePath);
+};
+
+const validateTapeSnapshotSchema = (schemaRef) => {
+  if (!schemaRef) return null;
+  const resolved = resolveConfigPath(schemaRef);
+  if (!resolved || !hasFs) return resolved;
+  try {
+    const contents = fs.readFileSync(resolved, 'utf8');
+    JSON.parse(contents);
+  } catch (err) {
+    console.warn(`Failed to validate tape snapshot schema '${schemaRef}':`, err?.message || err);
+  }
+  return resolved;
+};
+
+const loadTapeMachineEntry = (entry, id, schemaRef) => {
+  if (!entry) return null;
+  if (typeof entry === 'string') {
+    if (!hasFs) {
+      console.warn(`Unable to load tape machine '${id}' from '${entry}' without filesystem access.`);
+      return null;
+    }
+    const resolved = resolveConfigPath(entry);
+    if (!resolved) return null;
+    try {
+      const contents = fs.readFileSync(resolved, 'utf8');
+      const parsed = JSON.parse(contents);
+      if (!parsed.id) parsed.id = id;
+      if (schemaRef && !parsed.snapshotSchema) parsed.snapshotSchema = schemaRef;
+      return parsed;
+    } catch (err) {
+      console.warn(`Failed to load tape machine '${id}' from '${entry}':`, err?.message || err);
+      return null;
+    }
+  }
+  if (typeof entry === 'object') {
+    if (entry.table) {
+      return loadTapeMachineEntry(entry.table, entry.id || id, schemaRef);
+    }
+    const descriptor = { ...entry };
+    if (!descriptor.id) descriptor.id = id;
+    if (schemaRef && !descriptor.snapshotSchema) descriptor.snapshotSchema = schemaRef;
+    return descriptor;
+  }
+  return null;
+};
+
+const loadTapeMachinesFromConfig = (tcConfig = {}) => {
+  if (!tcConfig || typeof tcConfig !== 'object') return;
+  const machines = tcConfig.machines;
+  if (!machines || typeof machines !== 'object') return;
+  const schemaRef = tcConfig.snapshots?.turingTape?.schema || 'schemas/tc_tape_snapshot.schema.json';
+  validateTapeSnapshotSchema(schemaRef);
+  for (const [machineId, entry] of Object.entries(machines)) {
+    const descriptor = loadTapeMachineEntry(entry, machineId, schemaRef);
+    if (!descriptor) continue;
+    try {
+      TapeMachineRegistry.register(descriptor, null, { overwrite: true });
+    } catch (err) {
+      console.warn(`Failed to register tape machine '${machineId}':`, err?.message || err);
+    }
+  }
+};
 
 export const CONFIG = {
   // === Physics & Core Mechanics ===
@@ -21,7 +98,17 @@ export const CONFIG = {
     maxCachedChunks: 64,
     updateCadence: null,
     mode: null,
-    snapshots: {}
+    snapshots: {
+      turingTape: {
+        capture: false,
+        schema: 'schemas/tc_tape_snapshot.schema.json'
+      }
+    },
+    machines: {
+      unaryIncrementer: {
+        table: 'tc/machines/unary_incrementer.json'
+      }
+    }
   },
 
   // === Resource Ecology (dynamic resource availability) ===
@@ -344,6 +431,7 @@ export const CONFIG = {
 };
 
 applyTcConfig(CONFIG.tc || {});
+loadTapeMachinesFromConfig(CONFIG.tc || {});
 
 // --- Snapshots for panel resets ---
 let CURRENT_BASE_SNAPSHOT = null;        // last loaded/applied profile
@@ -908,6 +996,7 @@ function onConfigChanged() {
   if (typeof Trail !== 'undefined' && Trail && Trail.cell !== CONFIG.trailCell) Trail.resize();
   // You can add other "apply" hooks as needed.
   applyTcConfig(CONFIG.tc || {});
+  loadTapeMachinesFromConfig(CONFIG.tc || {});
   if (typeof window !== 'undefined' && window.SignalField) {
     const field = window.SignalField;
     const desiredCell = CONFIG.signal.cell;
