@@ -20,6 +20,8 @@ import { createResourceClass } from './src/core/resource.js';
 import { createWorld } from './src/core/world.js';
 import { initializeCanvasManager } from './src/ui/canvasManager.js';
 import { initializeInputManager } from './src/ui/inputManager.js';
+import { startSimulation } from './src/core/simulationLoop.js';
+import { createTrainingModule } from './src/core/training.js';
 
 (() => {
     const canvas = document.getElementById("view");
@@ -301,13 +303,8 @@ import { initializeInputManager } from './src/ui/inputManager.js';
     }
   
     // ---------- Learning System ----------
-    let learningMode = 'play'; // 'play' or 'train'
     const learner = new CEMLearner(23, 3); // 23 obs dims (was 15, now includes scent+density), 3 action dims
     const episodeManager = new EpisodeManager();
-    let trainingManager = null;
-    let currentTrainingPolicy = null;
-    let stopTrainingFlag = false;
-    let loadedPolicyInfo = null; // Store info about loaded policy file
   
     // ---------- Trail field (downsampled) ----------
     const Trail = {
@@ -443,7 +440,7 @@ import { initializeInputManager } from './src/ui/inputManager.js';
         ctx.restore();
       }
     };
-    
+
     // Call resize after Trail is defined (done later in code)
 
     // ---------- Fertility Grid (Plant Ecology) ----------
@@ -527,11 +524,37 @@ import { initializeInputManager } from './src/ui/inputManager.js';
       getPerformanceNow: () => performance.now()
     });
     World.reset();
-    
+
     // Expose World globally for console access
     if (typeof window !== 'undefined') {
       window.World = World;
     }
+
+    const { getLearningMode, initializeTrainingUI } = createTrainingModule({
+      world: World,
+      config: CONFIG,
+      trail: Trail,
+      signalField: SignalField,
+      tcScheduler: TcScheduler,
+      ledger: Ledger,
+      episodeManager,
+      learner,
+      TrainingManagerClass: TrainingManager,
+      TrainingUIClass: TrainingUI,
+      normalizeRewardSignal,
+      updateFindTimeEMA,
+      calculateAdaptiveReward,
+      getGlobalTick: () => globalTick,
+      incrementGlobalTick: () => { globalTick += 1; },
+      setWorldPaused: (paused) => { World.paused = paused; },
+      onLearningModeChange: (mode) => {
+        if (mode === 'train') {
+          World.bundles.forEach((b) => (b.useController = true));
+        } else {
+          World.bundles.forEach((b) => (b.useController = false));
+        }
+      }
+    });
   
     // ---------- Lineage Visualization ----------
     function drawLineageLinks(ctx) {
@@ -699,7 +722,7 @@ import { initializeInputManager } from './src/ui/inputManager.js';
         const simLines = [
           `⚙️  SIMULATION`,
           `   mode:      ${CONFIG.autoMove ? "AUTO" : "MANUAL"}`,
-          `   learning:  ${learningMode === 'train' ? "TRAINING" : "PLAY"}`,
+          `   learning:  ${getLearningMode() === 'train' ? "TRAINING" : "PLAY"}`,
           `   tick:      ${globalTick}`,
           `   χ earned:  ${World.collected}`
         ];
@@ -999,301 +1022,282 @@ import { initializeInputManager } from './src/ui/inputManager.js';
     }
 
     // ---------- Main loop ----------
-    let last = performance.now();
-    function loop(now) {
-      const dt = Math.min(0.1, (now - last) / 1000);
-      last = now;
-  
-      if (!World.paused) {
-        const tcEnabled = TcScheduler.getConfig().enabled;
-        const beginTick = tcEnabled ? TcScheduler.beginTick({
-          tick: globalTick,
-          dt,
-          mode: learningMode,
-          scheduler: 'play',
-          world: World
-        }) : null;
-        let tickContext = beginTick;
-        try {
-          Trail.captureSnapshot(); // fair residuals (prev frame)
-          if (CONFIG.signal.enabled) {
-            SignalField.captureSnapshot();
-          }
-          if (tcEnabled) TcScheduler.runPhase('capture', tickContext);
+    const beginTick = ({ dt, mode }) => {
+      const schedulerConfig = TcScheduler.getConfig();
+      if (!schedulerConfig?.enabled) {
+        return null;
+      }
+      return TcScheduler.beginTick({
+        tick: globalTick,
+        dt,
+        mode,
+        scheduler: mode === 'train' ? 'episode' : 'play',
+        world: World
+      });
+    };
 
-          // Link formation pass (cheap local heuristic)
-          for (let i = 0; i < World.bundles.length; i++) {
-            for (let j = i + 1; j < World.bundles.length; j++) {
-              const a = World.bundles[i];
-              const b = World.bundles[j];
-              if (!a.alive || !b.alive) continue;
-              tryFormLink(a, b);
-            }
-          }
+    const capturePhase = ({ tickContext }) => {
+      Trail.captureSnapshot();
+      if (CONFIG.signal.enabled) {
+        SignalField.captureSnapshot();
+      }
+      if (tickContext) {
+        TcScheduler.runPhase('capture', tickContext);
+      }
+    };
 
-          // Update each bundle with nearest resource
-          World.bundles.forEach(b => {
-            const nearestResource = World.getNearestResource(b);
-            b.update(dt, nearestResource);
-          });
-
-          if (tcEnabled) TcScheduler.runPhase('compute', tickContext);
-
-          // Link maintenance & decay, use-based strengthening
-          maintainLinks(dt);
-
-          Trail.step(dt);
-          if (CONFIG.signal.enabled) {
-            SignalField.step(dt);
-          }
-
-          // Trail reinforcement along active links
-          reinforceLinks(dt);
-
-          // Update resource ecology (carrying capacity dynamics)
-          World.updateEcology(dt);
-
-          // Consumable scent gradient: orbiting erodes, absence recovers
-          if (CONFIG.scentGradient.consumable) {
-            const orbitBand = CONFIG.scentGradient.orbitBandPx;
-            const minStrength = CONFIG.scentGradient.minStrength;
-            const minRange = CONFIG.scentGradient.minRange;
-            const baseStrength = CONFIG.scentGradient.strength;
-            const baseRange = CONFIG.scentGradient.maxRange;
-            const consumeRate = CONFIG.scentGradient.consumePerSec * dt;
-            const recoverRate = CONFIG.scentGradient.recoverPerSec * dt;
-
-            for (const res of World.resources) {
-              if (!res.visible) continue;
-              // Find nearest alive agent distance
-              let nearest = Infinity;
-              for (const b of World.bundles) {
-                if (!b.alive) continue;
-                const d = Math.hypot(res.x - b.x, res.y - b.y);
-                if (d < nearest) nearest = d;
-              }
-              // Inside orbit band (outside core radius)
-              const inner = res.r;
-              const outer = res.r + orbitBand;
-              if (nearest > inner && nearest <= outer) {
-                const t = 1 - (nearest - inner) / Math.max(1e-6, outer - inner); // 0..1 closer => bigger
-                const use = t * t; // quadratic for stronger close-in consumption
-                res.scentStrength = Math.max(minStrength, res.scentStrength - consumeRate * use);
-                // Optionally tie range to strength fraction
-                const frac = res.scentStrength / baseStrength;
-                const targetRange = Math.max(minRange, baseRange * frac);
-                // Smoothly relax toward target
-                res.scentRange += (targetRange - res.scentRange) * 0.5;
-              } else {
-                // Recover when no close orbiters
-                res.scentStrength = Math.min(baseStrength, res.scentStrength + recoverRate);
-                res.scentRange = Math.min(baseRange, res.scentRange + (baseRange - res.scentRange) * 0.1);
-              }
-            }
-          }
-        
-        // Clean up expired lineage links
-        World.cleanupLineageLinks();
-
-        // Agent collision detection and separation
-        if (CONFIG.enableAgentCollision) {
-          for (let i = 0; i < World.bundles.length; i++) {
-            for (let j = i + 1; j < World.bundles.length; j++) {
-              const a = World.bundles[i];
-              const b = World.bundles[j];
-              
-              // Skip if either agent is dead
-              if (!a.alive || !b.alive) continue;
-              
-              const dx = b.x - a.x;
-              const dy = b.y - a.y;
-              const dist = Math.hypot(dx, dy);
-              const minDist = a.size; // Both agents same size
-              
-              if (dist < minDist && dist > 0.001) {
-                // Overlapping! Push them apart
-                const overlap = minDist - dist;
-                const nx = dx / dist; // Normalized direction
-                const ny = dy / dist;
-                
-                // Push each agent away by half the overlap
-                const pushStrength = CONFIG.agentCollisionPushback;
-                a.x -= nx * overlap * pushStrength;
-                a.y -= ny * overlap * pushStrength;
-                b.x += nx * overlap * pushStrength;
-                b.y += ny * overlap * pushStrength;
-                
-                // Keep agents in bounds after collision
-                const half = a.size / 2;
-                a.x = clamp(a.x, half, canvasWidth - half);
-                a.y = clamp(a.y, half, canvasHeight - half);
-                b.x = clamp(b.x, half, canvasWidth - half);
-                b.y = clamp(b.y, half, canvasHeight - half);
-              }
-            }
-          }
+    const updateAgentsPhase = ({ dt, tickContext }) => {
+      for (let i = 0; i < World.bundles.length; i++) {
+        for (let j = i + 1; j < World.bundles.length; j++) {
+          const a = World.bundles[i];
+          const b = World.bundles[j];
+          if (!a.alive || !b.alive) continue;
+          tryFormLink(a, b);
         }
+      }
 
-        // Resource collection - check all resources for each bundle
-        World.bundles.forEach(b => {
-          if (!b.alive) return;
-          
-          for (let res of World.resources) {
-            // Only collect if resource is visible (not on cooldown)
-            if (res.visible && b.overlapsResource(res)) {
-              const rewardChi = CONFIG.rewardChi;
-              b.chi += rewardChi;
-              b.alive = true;
-              b.lastCollectTick = globalTick;
-              b.frustration = 0;
-              // Eating reduces hunger significantly
-              b.hunger = Math.max(0, b.hunger - CONFIG.hungerDecayOnCollect);
-              // Reset decay state (in case agent was dead/decaying)
-              b.deathTick = -1;
-              b.decayProgress = 0;
-              const rewardSignal = normalizeRewardSignal(rewardChi);
-              if (rewardSignal > 0) {
-                b.emitSignal('resource', rewardSignal, { absolute: true, x: b.x, y: b.y });
-              }
-              World.collected += 1;
-              World.onResourceCollected(); // Track ecology impact
+      World.bundles.forEach((bundle) => {
+        const nearestResource = World.getNearestResource(bundle);
+        bundle.update(dt, nearestResource);
+      });
 
-              // Deplete fertility at harvest location (plant ecology)
-              if (CONFIG.plantEcology.enabled && FertilityField) {
-                FertilityField.depleteAt(res.x, res.y, globalTick);
-              }
-              
-              // Start cooldown instead of immediate respawn
-              res.startCooldown();
-              break; // Only collect one resource per frame
-            }
+      if (tickContext) {
+        TcScheduler.runPhase('compute', tickContext);
+      }
+
+      maintainLinks(dt);
+    };
+
+    const environmentPhase = ({ dt }) => {
+      Trail.step(dt);
+      if (CONFIG.signal.enabled) {
+        SignalField.step(dt);
+      }
+
+      reinforceLinks(dt);
+      World.updateEcology(dt);
+
+      if (CONFIG.scentGradient.consumable) {
+        const orbitBand = CONFIG.scentGradient.orbitBandPx;
+        const minStrength = CONFIG.scentGradient.minStrength;
+        const minRange = CONFIG.scentGradient.minRange;
+        const baseStrength = CONFIG.scentGradient.strength;
+        const baseRange = CONFIG.scentGradient.maxRange;
+        const consumeRate = CONFIG.scentGradient.consumePerSec * dt;
+        const recoverRate = CONFIG.scentGradient.recoverPerSec * dt;
+
+        for (const res of World.resources) {
+          if (!res.visible) continue;
+          let nearest = Infinity;
+          for (const bundle of World.bundles) {
+            if (!bundle.alive) continue;
+            const d = Math.hypot(res.x - bundle.x, res.y - bundle.y);
+            if (d < nearest) nearest = d;
           }
-        });
-        
-        // Update resources (aging)
-        World.resources.forEach(res => res.update(dt));
-        
-        // Plant Ecology: Seed dispersal and spontaneous growth
-        if (CONFIG.plantEcology.enabled && FertilityField) {
-          // Calculate dynamic resource limit based on living agents (INVERSE: more agents = less food)
-          let maxResources = CONFIG.resourceStableMax;
-          const aliveCount = World.bundles.filter(b => b.alive).length;
-
-          if (CONFIG.resourceScaleWithAgents) {
-            const spawnPressure = CONFIG.plantEcology.spawnPressure;
-            const minResourceMultiplier = spawnPressure?.minResourceMultiplier ?? spawnPressure?.minSeedMultiplier ?? 1;
-            const pressureMultiplier = getSpawnPressureMultiplier(aliveCount, minResourceMultiplier);
-            const targetAbundance = CONFIG.resourceBaseAbundance * pressureMultiplier;
-            maxResources = Math.floor(
-              clamp(
-                targetAbundance,
-                CONFIG.resourceScaleMinimum,
-                CONFIG.resourceScaleMaximum
-              )
-            );
-          }
-
-          if (World.resources.length > maxResources) {
-            const excess = World.resources.length - maxResources;
-            World.resources.splice(-excess, excess);
-            console.log(`🔪 Culled ${excess} excess resources due to competition (${aliveCount} agents)`);
-          }
-
-          // Seed dispersal (resources spawn near existing ones)
-          const seedLocation = attemptSeedDispersal(World.resources, FertilityField, globalTick, dt, aliveCount);
-          if (seedLocation && World.resources.length < maxResources) {
-            const newResource = new Resource(seedLocation.x, seedLocation.y, CONFIG.resourceRadius);
-            World.resources.push(newResource);
-            console.log(`🌱 Seed sprouted at (${Math.round(seedLocation.x)}, ${Math.round(seedLocation.y)}) | Fertility: ${seedLocation.fertility.toFixed(2)}`);
-          }
-
-          // Spontaneous growth (resources appear in fertile soil)
-          const growthLocation = attemptSpontaneousGrowth(FertilityField, dt, aliveCount);
-          if (growthLocation && World.resources.length < maxResources) {
-            const newResource = new Resource(growthLocation.x, growthLocation.y, CONFIG.resourceRadius);
-            World.resources.push(newResource);
-            console.log(`🌿 Spontaneous growth at (${Math.round(growthLocation.x)}, ${Math.round(growthLocation.y)}) | Fertility: ${growthLocation.fertility.toFixed(2)}`);
-          }
-
-          // Update fertility grid (recovery + population pressure)
-          FertilityField.update(dt, aliveCount, globalTick);
-        }
-
-        // Mitosis - agents attempt reproduction (only in play mode, not during training)
-        if (learningMode === 'play') {
-          // Use traditional for loop to avoid issues with array modification during iteration
-          const currentBundles = [...World.bundles]; // Copy array
-          currentBundles.forEach(b => {
-            if (b.alive) {
-              b.attemptMitosis();
-            }
-          });
-        }
-
-        // Decay - dead agents decay and recycle chi into fertility
-        if (CONFIG.decay.enabled) {
-          try {
-            // Update decay for all dead agents and mark fully decayed ones for removal
-            const toRemove = [];
-            World.bundles.forEach((b, idx) => {
-              try {
-                const fullyDecayed = b.updateDecay(dt, FertilityField);
-                if (fullyDecayed) {
-                  toRemove.push(idx);
-                }
-              } catch (err) {
-                console.error(`Error updating decay for agent ${b.id}:`, err);
-              }
-            });
-            
-            // Remove fully decayed agents (iterate backwards to avoid index shifts)
-            for (let i = toRemove.length - 1; i >= 0; i--) {
-              const idx = toRemove[i];
-              if (idx >= 0 && idx < World.bundles.length) {
-                const removed = World.bundles.splice(idx, 1)[0];
-                console.log(`💀 Agent ${removed.id} fully decayed and removed | Pop: ${World.bundles.length}`);
-              }
-            }
-          } catch (err) {
-            console.error('Error in decay system:', err);
-          }
-          }
-
-          if (tcEnabled) TcScheduler.runPhase('commit', tickContext);
-          globalTick++;
-          if (globalTick - lastSignalStatTick >= 30) {
-            lastSignalStatTick = globalTick;
-            const fieldStats = typeof SignalField.getStats === 'function' ? SignalField.getStats() : null;
-            const responseSummary = SignalResponseAnalytics.getSummary();
-            if (window.trainingUI && typeof window.trainingUI.updateSignalStats === 'function') {
-              const snr = fieldStats?.snr ?? [];
-              const totalPower = fieldStats?.totalPower ?? [];
-              const channelCount = fieldStats?.channels ?? (SignalField.channelCount || 0);
-              window.trainingUI.updateSignalStats({
-                channelCount,
-                diversity: fieldStats?.diversity ?? 0,
-                snr,
-                totalPower,
-                coherence: responseSummary?.coherence ?? 0,
-                perChannel: responseSummary?.perChannel ?? {}
-              });
-            }
-          }
-        } catch (err) {
-          console.error('Critical error in main loop (tick ' + globalTick + '):', err);
-          console.error('Stack trace:', err.stack);
-          // Don't pause - let simulation continue
-        } finally {
-          if (tcEnabled && tickContext) {
-            TcScheduler.endTick(tickContext);
+          const inner = res.r;
+          const outer = res.r + orbitBand;
+          if (nearest > inner && nearest <= outer) {
+            const t = 1 - (nearest - inner) / Math.max(1e-6, outer - inner);
+            const use = t * t;
+            res.scentStrength = Math.max(minStrength, res.scentStrength - consumeRate * use);
+            const frac = res.scentStrength / baseStrength;
+            const targetRange = Math.max(minRange, baseRange * frac);
+            res.scentRange += (targetRange - res.scentRange) * 0.5;
+          } else {
+            res.scentStrength = Math.min(baseStrength, res.scentStrength + recoverRate);
+            res.scentRange = Math.min(baseRange, res.scentRange + (baseRange - res.scentRange) * 0.1);
           }
         }
       }
-  
-      // draw
+
+      World.cleanupLineageLinks();
+
+      if (CONFIG.enableAgentCollision) {
+        for (let i = 0; i < World.bundles.length; i++) {
+          for (let j = i + 1; j < World.bundles.length; j++) {
+            const a = World.bundles[i];
+            const b = World.bundles[j];
+            if (!a.alive || !b.alive) continue;
+
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const dist = Math.hypot(dx, dy);
+            const minDist = a.size;
+
+            if (dist < minDist && dist > 0.001) {
+              const overlap = minDist - dist;
+              const nx = dx / dist;
+              const ny = dy / dist;
+              const pushStrength = CONFIG.agentCollisionPushback;
+              a.x -= nx * overlap * pushStrength;
+              a.y -= ny * overlap * pushStrength;
+              b.x += nx * overlap * pushStrength;
+              b.y += ny * overlap * pushStrength;
+
+              const half = a.size / 2;
+              a.x = clamp(a.x, half, canvasWidth - half);
+              a.y = clamp(a.y, half, canvasHeight - half);
+              b.x = clamp(b.x, half, canvasWidth - half);
+              b.y = clamp(b.y, half, canvasHeight - half);
+            }
+          }
+        }
+      }
+    };
+
+    const resourcePhase = ({ dt }) => {
+      World.bundles.forEach((bundle) => {
+        if (!bundle.alive) return;
+        for (const res of World.resources) {
+          if (!(res.visible && bundle.overlapsResource(res))) continue;
+
+          const rewardChi = CONFIG.rewardChi;
+          bundle.chi += rewardChi;
+          bundle.alive = true;
+          bundle.lastCollectTick = globalTick;
+          bundle.frustration = 0;
+          bundle.hunger = Math.max(0, bundle.hunger - CONFIG.hungerDecayOnCollect);
+          bundle.deathTick = -1;
+          bundle.decayProgress = 0;
+          const rewardSignal = normalizeRewardSignal(rewardChi);
+          if (rewardSignal > 0) {
+            bundle.emitSignal('resource', rewardSignal, { absolute: true, x: bundle.x, y: bundle.y });
+          }
+          World.collected += 1;
+          World.onResourceCollected();
+
+          if (CONFIG.plantEcology.enabled && FertilityField) {
+            FertilityField.depleteAt(res.x, res.y, globalTick);
+          }
+
+          res.startCooldown();
+          break;
+        }
+      });
+
+      World.resources.forEach((res) => res.update(dt));
+
+      if (CONFIG.plantEcology.enabled && FertilityField) {
+        let maxResources = CONFIG.resourceStableMax;
+        const aliveCount = World.bundles.filter((bundle) => bundle.alive).length;
+
+        if (CONFIG.resourceScaleWithAgents) {
+          const spawnPressure = CONFIG.plantEcology.spawnPressure;
+          const minResourceMultiplier = spawnPressure?.minResourceMultiplier ?? spawnPressure?.minSeedMultiplier ?? 1;
+          const pressureMultiplier = getSpawnPressureMultiplier(aliveCount, minResourceMultiplier);
+          const targetAbundance = CONFIG.resourceBaseAbundance * pressureMultiplier;
+          maxResources = Math.floor(
+            clamp(
+              targetAbundance,
+              CONFIG.resourceScaleMinimum,
+              CONFIG.resourceScaleMaximum
+            )
+          );
+        }
+
+        if (World.resources.length > maxResources) {
+          const excess = World.resources.length - maxResources;
+          World.resources.splice(-excess, excess);
+          console.log(`🔪 Culled ${excess} excess resources due to competition (${aliveCount} agents)`);
+        }
+
+        const seedLocation = attemptSeedDispersal(World.resources, FertilityField, globalTick, dt, aliveCount);
+        if (seedLocation && World.resources.length < maxResources) {
+          const newResource = new Resource(seedLocation.x, seedLocation.y, CONFIG.resourceRadius);
+          World.resources.push(newResource);
+          console.log(`🌱 Seed sprouted at (${Math.round(seedLocation.x)}, ${Math.round(seedLocation.y)}) | Fertility: ${seedLocation.fertility.toFixed(2)}`);
+        }
+
+        const growthLocation = attemptSpontaneousGrowth(FertilityField, dt, aliveCount);
+        if (growthLocation && World.resources.length < maxResources) {
+          const newResource = new Resource(growthLocation.x, growthLocation.y, CONFIG.resourceRadius);
+          World.resources.push(newResource);
+          console.log(`🌿 Spontaneous growth at (${Math.round(growthLocation.x)}, ${Math.round(growthLocation.y)}) | Fertility: ${growthLocation.fertility.toFixed(2)}`);
+        }
+
+        FertilityField.update(dt, aliveCount, globalTick);
+      }
+    };
+
+    const reproductionPhase = ({ mode }) => {
+      if (mode !== 'play') {
+        return;
+      }
+      const currentBundles = [...World.bundles];
+      currentBundles.forEach((bundle) => {
+        if (bundle.alive) {
+          bundle.attemptMitosis();
+        }
+      });
+    };
+
+    const decayPhase = ({ dt }) => {
+      if (!CONFIG.decay.enabled) {
+        return;
+      }
+      try {
+        const toRemove = [];
+        World.bundles.forEach((bundle, idx) => {
+          try {
+            const fullyDecayed = bundle.updateDecay(dt, FertilityField);
+            if (fullyDecayed) {
+              toRemove.push(idx);
+            }
+          } catch (err) {
+            console.error(`Error updating decay for agent ${bundle.id}:`, err);
+          }
+        });
+
+        for (let i = toRemove.length - 1; i >= 0; i--) {
+          const idx = toRemove[i];
+          if (idx >= 0 && idx < World.bundles.length) {
+            const removed = World.bundles.splice(idx, 1)[0];
+            console.log(`💀 Agent ${removed.id} fully decayed and removed | Pop: ${World.bundles.length}`);
+          }
+        }
+      } catch (err) {
+        console.error('Error in decay system:', err);
+      }
+    };
+
+    const finalizePhase = ({ tickContext }) => {
+      if (tickContext) {
+        TcScheduler.runPhase('commit', tickContext);
+      }
+      globalTick += 1;
+      if (globalTick - lastSignalStatTick >= 30) {
+        lastSignalStatTick = globalTick;
+        const fieldStats = typeof SignalField.getStats === 'function' ? SignalField.getStats() : null;
+        const responseSummary = SignalResponseAnalytics.getSummary();
+        if (window.trainingUI && typeof window.trainingUI.updateSignalStats === 'function') {
+          const snr = fieldStats?.snr ?? [];
+          const totalPower = fieldStats?.totalPower ?? [];
+          const channelCount = fieldStats?.channels ?? (SignalField.channelCount || 0);
+          window.trainingUI.updateSignalStats({
+            channelCount,
+            diversity: fieldStats?.diversity ?? 0,
+            snr,
+            totalPower,
+            coherence: responseSummary?.coherence ?? 0,
+            perChannel: responseSummary?.perChannel ?? {}
+          });
+        }
+      }
+    };
+
+    const simulationPhases = [
+      capturePhase,
+      updateAgentsPhase,
+      environmentPhase,
+      resourcePhase,
+      reproductionPhase,
+      decayPhase,
+      finalizePhase
+    ];
+
+    const drawFrame = () => {
       ctx.fillStyle = "#000"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      // Draw fertility visualization if enabled (below trails)
+
       if (inputState.showFertility && CONFIG.plantEcology.enabled && FertilityField) {
         FertilityField.draw(ctx);
       }
@@ -1302,8 +1306,7 @@ import { initializeInputManager } from './src/ui/inputManager.js';
         SignalField.draw(ctx);
       }
       Trail.draw();
-      
-      // Draw links (debug visualization)
+
       (function drawLinks() {
         if (!Links.length) return;
         ctx.save();
@@ -1322,430 +1325,51 @@ import { initializeInputManager } from './src/ui/inputManager.js';
         }
         ctx.restore();
       })();
-      
-      // Draw lineage links (parent-child connections)
+
       if (CONFIG.mitosis.showLineage) {
         drawLineageLinks(ctx);
       }
-      
-      // Draw all resources (only visible ones)
-      World.resources.forEach(res => {
+
+      World.resources.forEach((res) => {
         if (res.visible) {
           res.draw(ctx);
         }
       });
-      
-      World.bundles.forEach(b => b.draw(ctx));
-      
+
+      World.bundles.forEach((bundle) => bundle.draw(ctx));
+
       drawHUD();
-      
-      // Draw Rule 110 overlay LAST (on top of everything including HUD)
-      // Note: showOverlay can be enabled independently of tcResourceIntegration for debugging
+
       if (CONFIG.tcResourceIntegration?.showOverlay && window.rule110Stepper) {
         drawRule110Overlay(ctx, window.rule110Stepper, canvasWidth, canvasHeight);
       }
-  
-      requestAnimationFrame(loop);
-    }
-    
-    // ---------- Training System Integration ----------
-    
-    /**
-     * Run one episode with a given policy
-     * Returns total reward (combined from all agents)
-     */
-    async function runEpisode(policy) {
-      // Reset world for fresh episode
-      World.reset();
-      episodeManager.startEpisode();
-      
-      // Set ALL bundles to use this policy (shared policy multi-agent learning!)
-      World.bundles.forEach(bundle => {
-        bundle.controller = policy;
-        bundle.useController = true;
-        bundle.rewardTracker.reset();
-      });
-      
-      // Reset ledger for provenance tracking
-      Ledger.credits = {};
-      
-      let totalReward = 0;
-      let episodeTicks = 0;
-      const maxTicks = CONFIG.learning.episodeLength;
-      
-      // Run episode (continue while ANY agent is alive)
-      while (episodeTicks < maxTicks && World.bundles.some(b => b.alive)) {
-        const dt = 1/60; // Fixed timestep for training
-        const tcEnabled = TcScheduler.getConfig().enabled;
-        const beginTick = tcEnabled ? TcScheduler.beginTick({
-          tick: globalTick,
-          dt,
-          mode: 'train',
-          scheduler: 'episode',
-          world: World
-        }) : null;
-        let tickContext = beginTick;
-        try {
-          // Capture snapshot for fair trail sampling
-          Trail.captureSnapshot();
-          if (CONFIG.signal.enabled) {
-            SignalField.captureSnapshot();
-          }
-          if (tcEnabled) TcScheduler.runPhase('capture', tickContext);
+    };
 
-          // Update BOTH agents
-          let totalChiSpent = 0;
-          let totalCollected = 0;
-
-          for (let i = 0; i < World.bundles.length; i++) {
-          const bundle = World.bundles[i];
-          if (!bundle.alive) continue; // Skip dead agents
-
-          // Track chi before update
-          const chiBeforeUpdate = bundle.chi;
-
-          // Update bundle with nearest resource
-          const nearestResource = World.getNearestResource(bundle);
-          bundle.update(dt, nearestResource);
-
-          // Calculate chi spent
-          const chiSpent = Math.max(0, chiBeforeUpdate - bundle.chi);
-          totalChiSpent += chiSpent;
-
-          // Check resource collection - check all resources
-          let collectedResource = false;
-
-          for (let res of World.resources) {
-            // Only collect if resource is visible (not on cooldown)
-            if (bundle.alive && res.visible && bundle.overlapsResource(res)) {
-              // === Adaptive Reward Calculation ===
-              let rewardChi;
-              
-              if (CONFIG.adaptiveReward?.enabled) {
-                // Update EMA and get adaptive reward
-                const dtFind = updateFindTimeEMA(World);
-                rewardChi = calculateAdaptiveReward(World.avgFindTime);
-                
-                // Update stats
-                World.rewardStats.totalRewards += rewardChi;
-                World.rewardStats.avgRewardGiven = World.rewardStats.totalRewards / (World.collected + 1);
-                
-                // Log for debugging (every 10 collections)
-                if (World.collected % 10 === 0 && World.collected > 0) {
-                  console.log(`[Adaptive Reward] Find #${World.collected}: ` +
-                              `dt=${dtFind.toFixed(2)}s, ` +
-                              `avgT=${World.avgFindTime.toFixed(2)}s, ` +
-                              `reward=${rewardChi.toFixed(2)}χ`);
-                }
-              } else {
-                // Fallback to fixed reward
-                rewardChi = CONFIG.rewardChi;
-              }
-              
-              bundle.chi += rewardChi;
-              bundle.alive = true;
-              bundle.lastCollectTick = globalTick;
-              bundle.frustration = 0;
-              // Eating reduces hunger significantly
-              bundle.hunger = Math.max(0, bundle.hunger - CONFIG.hungerDecayOnCollect);
-              // Reset decay state (in case agent was dead/decaying)
-              bundle.deathTick = -1;
-              bundle.decayProgress = 0;
-              const rewardSignal = normalizeRewardSignal(rewardChi);
-              if (rewardSignal > 0) {
-                bundle.emitSignal('resource', rewardSignal, { absolute: true, x: bundle.x, y: bundle.y });
-              }
-              World.collected += 1;
-              World.onResourceCollected(); // Track ecology impact
-              // Start cooldown instead of immediate respawn
-              res.startCooldown();
-              collectedResource = true;
-              totalCollected++;
-              break; // Only collect one resource per frame
-            }
-          }
-          
-          // Compute reward for this agent
-          const provenanceCredit = Ledger.getCredits(bundle.id);
-          const stepReward = bundle.rewardTracker.computeStepReward(
-            collectedResource,
-            chiSpent,
-            provenanceCredit,
-            World.resources  // Pass resources for gradient climbing reward
-          );
-          totalReward += stepReward;
+    startSimulation({
+      shouldStep: () => !World.paused,
+      getMode: () => getLearningMode(),
+      getPhases: () => simulationPhases,
+      beginTick,
+      endTick: (context) => {
+        if (context) {
+          TcScheduler.endTick(context);
         }
-
-          if (tcEnabled) TcScheduler.runPhase('compute', tickContext);
-
-          // Update trail field (shared environment)
-          Trail.step(dt);
-          if (CONFIG.signal.enabled) {
-            SignalField.step(dt);
-          }
-
-          if (tcEnabled) TcScheduler.runPhase('commit', tickContext);
-
-          globalTick++;
-          episodeTicks++;
-
-          // Yield to browser occasionally to keep UI responsive
-          if (episodeTicks % 100 === 0) {
-            await new Promise(resolve => setTimeout(resolve, 0));
-          }
-        } finally {
-          if (tcEnabled && tickContext) {
-            TcScheduler.endTick(tickContext);
-          }
+      },
+      draw: drawFrame,
+      onError: (error) => {
+        console.error('Critical error in main loop (tick ' + globalTick + '):', error);
+        if (error && error.stack) {
+          console.error('Stack trace:', error.stack);
         }
       }
-      
-      // Add death penalties for agents that died
-      for (const bundle of World.bundles) {
-        if (!bundle.alive && episodeTicks < maxTicks) {
-          totalReward += CONFIG.learning.rewards.death;
-        }
-      }
-      
-      const summary = episodeManager.endEpisode(World.bundles[0].rewardTracker);
-      return totalReward;
-    }
-    
-    /**
-     * Initialize Training Manager
-     */
-    function initializeTrainingManager() {
-      trainingManager = new TrainingManager(
-        learner,
-        () => World.reset(),
-        (policy) => runEpisode(policy)
-      );
-    }
-    
-    /**
-     * Initialize Training UI and callbacks
-     */
-    function initializeTrainingUI() {
-      const ui = new TrainingUI(document.body);
-      window.trainingUI = ui; // Make globally accessible
-      
-      // Mode change
-      ui.on('onModeChange', (mode) => {
-        learningMode = mode;
-        if (mode === 'train') {
-          console.log('Switched to Training Mode');
-          World.bundles.forEach(b => b.useController = true);
-        } else {
-          console.log('Switched to Play Mode');
-          World.bundles.forEach(b => b.useController = false);
-        }
-      });
-      
-      // Start training
-      ui.on('onStartTraining', async (numGenerations) => {
-        if (!trainingManager) initializeTrainingManager();
-        
-        stopTrainingFlag = false; // Reset flag
-        
-        console.log(`🤝 Multi-Agent Training Starting: ALL ${World.bundles.length} agents use shared policy`);
-        console.log(`   Episode reward = Sum of all agent rewards`);
-        console.log(`   Agents can learn cooperation via trails and provenance credits!`);
-        
-        ui.updateStats({
-          status: 'Multi-Agent Training...',
-          generation: learner.generation,
-          populationSize: CONFIG.learning.populationSize
-        });
-        
-        World.paused = true; // Pause visualization during training
-        
-        for (let gen = 0; gen < numGenerations; gen++) {
-          // Check stop flag
-          if (stopTrainingFlag) {
-            console.log('Training stopped by user');
-            break;
-          }
-          
-          const result = await trainingManager.runGeneration();
-          
-          // Update UI
-          ui.updateStats({
-            status: `Gen ${result.generation}/${numGenerations}`,
-            generation: result.generation,
-            bestReward: result.bestReward,
-            meanReward: result.meanReward,
-            currentPolicy: trainingManager.currentPolicy,
-            populationSize: CONFIG.learning.populationSize
-          });
-          
-          // Update chart
-          const stats = learner.getStats();
-          if (stats) {
-            ui.drawLearningCurve(stats.history);
-          }
-          
-          console.log(`Gen ${result.generation}: best=${result.bestReward.toFixed(2)}, mean=${result.meanReward.toFixed(2)}`);
-        }
-        
-        ui.updateStats({
-          status: stopTrainingFlag ? 'Training Stopped' : 'Training Complete!',
-          generation: learner.generation,
-          bestReward: learner.bestReward,
-          populationSize: CONFIG.learning.populationSize
-        });
-        
-        World.paused = false;
-        
-        document.getElementById('start-training').disabled = false;
-        document.getElementById('stop-training').disabled = true;
-      });
-      
-      // Stop training
-      ui.on('onStopTraining', () => {
-        stopTrainingFlag = true;
-        if (trainingManager) {
-          trainingManager.stop();
-        }
-        World.paused = false;
-        console.log('Stop training requested');
-      });
-      
-      // Reset learner
-      ui.on('onResetLearner', () => {
-        learner.generation = 0;
-        learner.bestReward = -Infinity;
-        learner.bestWeights = null;
-        learner.history = [];
-        learner.mu = new Array(learner.weightDims).fill(0);
-        learner.sigma = new Array(learner.weightDims).fill(CONFIG.learning.mutationStdDev);
-        
-        ui.updateStats({
-          status: 'Learner Reset',
-          generation: 0,
-          bestReward: 0,
-          meanReward: 0
-        });
-        
-        ui.drawLearningCurve([]);
-        
-        console.log('Learner reset to initial state');
-      });
-      
-      // Save policy
-      ui.on('onSavePolicy', () => {
-        const state = learner.save();
-        const json = JSON.stringify(state, null, 2);
-        const blob = new Blob([json], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `slime-policy-gen${learner.generation}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-        console.log('Policy saved!');
-      });
-      
-      // Load policy
-      ui.on('onLoadPolicy', () => {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'application/json';
-        input.onchange = (e) => {
-          const file = e.target.files[0];
-          if (file) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-              try {
-                const state = JSON.parse(e.target.result);
-                learner.load(state);
-                
-                // Store loaded policy info
-                loadedPolicyInfo = {
-                  filename: file.name,
-                  generation: learner.generation,
-                  bestReward: learner.bestReward,
-                  timestamp: new Date().toLocaleString()
-                };
-                
-                // Update UI
-                ui.updateStats({
-                  status: 'Policy Loaded!',
-                  generation: learner.generation,
-                  bestReward: learner.bestReward
-                });
-                ui.drawLearningCurve(learner.history);
-                ui.showLoadedPolicyInfo(file.name, learner.generation, learner.bestReward);
-                
-                console.log(`Policy loaded: ${file.name} (Gen ${learner.generation}, Reward: ${learner.bestReward.toFixed(2)})`);
-              } catch (err) {
-                console.error('Failed to load policy:', err);
-                alert('Failed to load policy file');
-              }
-            };
-            reader.readAsText(file);
-          }
-        };
-        input.click();
-      });
-      
-      // Test best policy
-      ui.on('onTestPolicy', () => {
-        const bestPolicy = learner.getBestPolicy();
-        if (bestPolicy) {
-          World.reset();
-          // Apply policy to ALL agents
-          World.bundles.forEach(bundle => {
-            bundle.controller = bestPolicy;
-            bundle.useController = true;
-          });
-          learningMode = 'play';
-          const infoStr = loadedPolicyInfo 
-            ? `${loadedPolicyInfo.filename} (Gen ${loadedPolicyInfo.generation})`
-            : `current best (Gen ${learner.generation})`;
-          console.log(`Testing policy (ALL ${World.bundles.length} AGENTS): ${infoStr}`);
-        } else {
-          alert('No trained policy available yet!');
-        }
-      });
-      
-      // Use loaded policy (same as test, but clearer)
-      ui.on('onUsePolicy', () => {
-        const bestPolicy = learner.getBestPolicy();
-        if (bestPolicy) {
-          World.reset();
-          // Apply policy to ALL agents (multi-agent!)
-          World.bundles.forEach(bundle => {
-            bundle.controller = bestPolicy;
-            bundle.useController = true;
-          });
-          learningMode = 'play';
-          
-          // Enable action display for debugging
-          CONFIG.hud.showActions = true;
-          
-          if (loadedPolicyInfo) {
-            console.log(`Using loaded policy (ALL ${World.bundles.length} AGENTS): ${loadedPolicyInfo.filename} (Gen ${loadedPolicyInfo.generation}, Reward: ${loadedPolicyInfo.bestReward.toFixed(2)})`);
-            console.log(`💡 Tip: Watch all agents' actions (T=turn, P=thrust, S=sense) with yellow borders.`);
-            console.log(`🤝 Multi-agent: All agents use the same policy and can learn from each other's trails!`);
-          } else {
-            console.log(`Using current best policy (ALL ${World.bundles.length} AGENTS, Gen ${learner.generation})`);
-          }
-        } else {
-          alert('No policy loaded yet!');
-        }
-      });
-      
-      console.log('Training UI initialized. Press [L] to toggle.');
-    }
-    
-    // Initialize training UI when DOM is ready
+    });
+
+    const initTrainingUI = () => initializeTrainingUI();
+
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initializeTrainingUI);
+      document.addEventListener('DOMContentLoaded', initTrainingUI, { once: true });
     } else {
-      initializeTrainingUI();
+      initTrainingUI();
     }
-    
-    // Start main loop
-    requestAnimationFrame(loop);
   })();
   
