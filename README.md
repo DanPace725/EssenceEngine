@@ -1,15 +1,26 @@
 # Slime-Bundle
 
-Slime-Bundle is a browser-based simulation that explores the emergent behavior of simple, resource-seeking agents ("bundles") in a dynamic 2D environment. It combines elements of plant ecology, reinforcement learning, and agent-based modeling to create a rich, interactive world.
+Slime-Bundle is a browser-based sandbox for exploring emergent behavior in swarms of resource-seeking agents ("bundles"). The refactored codebase separates rendering, simulation, and tooling into modular packages so you can iterate on ecology experiments, learning pipelines, or UI instrumentation without wading through a single monolithic script.
 
 ## Features
 
-*   **Complex Agent Behavior:** Agents exhibit a range of behaviors including foraging, trail-laying, and responding to environmental cues.
-*   **Dynamic Plant Ecology:** A fertility-based system governs resource distribution, creating a more natural and clustered environment.
-*   **Reinforcement Learning:** Agents can be trained using the Cross-Entropy Method (CEM) to learn effective foraging strategies.
-*   **Interactive Simulation:** A wide range of keyboard controls allow you to manipulate the simulation, toggle visualizations, and interact with the agents.
-*   **Highly Configurable:** The simulation's parameters are exposed in `config.js`, allowing you to experiment with different scenarios.
-*   **TC Snapshot Mode:** Load `profiles/universality/casual_universality_flex.json` to enable the deterministic Rule 110 runner and stream `tc.rule110.snapshot` manifests for manifest validation and headless reproductions.
+* **Modular Simulation Core:** The runtime is organized into focused modules for the world state, systems, UI wiring, and shared utilities under `src/`, making it easier to extend individual mechanics or replace subsystems without side effects.【F:src/index.js†L1-L23】【F:src/core/world.js†L1-L120】
+* **Dynamic Ecology:** Plant fertility, carrying capacity, and residual trail systems work together to produce clustered resources that react to agent pressure.【F:src/core/world.js†L41-L120】
+* **Multi-Agent Training:** A dedicated training module orchestrates synchronized episodes for every bundle, captures telemetry, and coordinates the Cross-Entropy Method (CEM) learner alongside the training UI controls.【F:src/core/training.js†L1-L140】【F:src/core/training.js†L175-L248】
+* **Interactive Simulation:** Keyboard and UI controls let you toggle sensing, gradients, mitosis, telemetry overlays, and training workflows while the render loop adapts to play vs. train modes.【F:src/core/simulationLoop.js†L1-L101】【F:trainingUI.js†L1-L120】
+* **Configurable Systems:** Parameters for ecology, sensing, rewards, HUD overlays, and learning live in `config.js` so experiments can be tuned without touching code.【F:config.js†L1-L260】
+
+## Project Structure
+
+```
+src/
+  core/         # world assembly, simulation loop orchestration, training coordinator
+  systems/      # discrete systems for movement, sensing, metabolism, mitosis, resources
+  ui/           # browser input and canvas managers
+  utils/        # math helpers and shared utilities
+```
+
+Legacy entry points (`app.js`, `controllers.js`, etc.) remain for backward compatibility, but new features should target the modular `src/` packages.
 
 ## Controls
 
@@ -33,27 +44,23 @@ Slime-Bundle is a browser-based simulation that explores the emergent behavior o
 
 ## Configuration
 
-The simulation's behavior is controlled by a central configuration file, `config.js`. This file exports a `CONFIG` object containing numerous parameters that you can modify to alter the simulation.
+`config.js` exports a single `CONFIG` object that drives ecology, autonomy, UI overlays, and training policies. Highlights:
 
-### Key Configuration Areas:
+* **`plantEcology`** – Enables the fertility-based resource system and its carrying-capacity logic.【F:config.js†L74-L145】
+* **`adaptiveReward`** – Optional adaptive reward calculations that scale payouts with search difficulty; toggle `enabled` to experiment without committing to the mechanic full-time.【F:config.js†L214-L230】
+* **`mitosis`** – Controls reproduction thresholds, lineage overlays, and population caps.【F:config.js†L308-L365】
+* **`learning`** – Configures CEM population sizes, mutation schedules, and episode horizons for bundled training runs.【F:config.js†L386-L474】
 
-*   **`plantEcology`**: Controls the fertility-based resource system. You can enable/disable it, change fertility parameters, and adjust seed dispersal mechanics.
-*   **`adaptiveReward`**: Manages the adaptive reward system. You can enable/disable it and tweak the parameters that determine how rewards are calculated.
-*   **`mitosis`**: Governs agent reproduction. You can set the energy threshold for mitosis, the cost, and the population limits.
-*   **`ai`**: A collection of parameters that control the agents' AI, including their sensory range, exploration behavior, and frustration mechanics.
-*   **`learning`**: Contains settings for the reinforcement learning system, such as the population size, mutation rate, and episode length.
+## Training Workflow
 
-## Learning System
+Press `L` to open the training dashboard and manage multi-agent learning sessions. Behind the scenes the training coordinator:
 
-The simulation includes a reinforcement learning system based on the **Cross-Entropy Method (CEM)**. This is a simple evolutionary algorithm that trains a linear policy for the agents.
+1. Resets the world and assigns the candidate policy to each bundle before an episode.【F:src/core/training.js†L25-L77】
+2. Steps every bundle in lock-step while capturing trail/signal telemetry and computing adaptive or fixed rewards per collection.【F:src/core/training.js†L92-L183】
+3. Hands reward aggregates back to the learner so CEM can rank elites and evolve the next generation.【F:src/core/training.js†L184-L248】
 
-### Training UI
+The UI surface lets you start/stop batches, save or load policies, and swap between play/test/train modes without restarting the simulation.【F:trainingUI.js†L45-L120】
 
-You can access the training UI by pressing the `L` key. The UI provides the following controls:
+## Documentation
 
-*   **Start Training:** Begins the training process. The simulation will run many episodes in the background to evaluate and improve the agents' policies.
-*   **Stop Training:** Halts the training process.
-*   **Save Policy:** Saves the current best policy to a JSON file.
-*   **Load Policy:** Loads a previously saved policy from a JSON file.
-*   **Test Best Policy:** Resets the simulation and applies the current best policy to the agents.
-*   **Reset Learner:** Resets the learning system to its initial state.
+Head to `docs/INDEX.md` for a curated map of maintained guides, experimental write-ups, and notes on legacy material that still references the pre-modular layout or HUD overlays.
