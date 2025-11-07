@@ -1484,6 +1484,7 @@ import { collectResource } from './src/systems/resourceSystem.js';
       if (CONFIG.signal.enabled) {
         SignalField.draw(ctx);
       }
+      ParticipationManager.draw(ctx);
       Trail.draw();
 
       (function drawLinks() {

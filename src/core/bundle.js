@@ -8,6 +8,7 @@ import { computeSensingUpdate } from './sensing.js';
 import { computeMetabolicCost } from '../systems/metabolism.js';
 import { resolveControllerAction } from '../systems/controllerAction.js';
 import { computeSteering } from '../systems/steering.js';
+import ParticipationManager from '../systems/participation.js';
 import { computeMovement, evaluateResidualEffects } from '../systems/movement.js';
 import { createMitosisSystem } from '../systems/mitosis.js';
 import { createDecaySystem } from '../systems/decay.js';
@@ -136,6 +137,9 @@ export function createBundleClass(context) {
 
       // Cached mitosis readiness (updated each frame)
       this._mitosisState = { mitosisReady: false, buddingReady: false };
+
+      // Participation wave context sampled from ParticipationManager
+      this.participationWaveSample = null;
     }
 
     computeSensoryRange(dt) {
@@ -159,9 +163,13 @@ export function createBundleClass(context) {
       let dx = 0, dy = 0;
       let resourceVisible = false;
       const signals = this.signalContext || {};
-      const distressBias = clamp(this.interpretation_bias?.distress ?? 0, 0, 1);
-      const resourceBias = clamp(this.interpretation_bias?.resource ?? 0, 0, 1);
-      const bondConflict = clamp(this.interpretation_bias?.bond ?? 0, 0, 1);
+      const waveSample = this.participationWaveSample || {};
+      const waveResource = clamp(waveSample.resource ?? 0, 0, 1);
+      const waveDistress = clamp(waveSample.distress ?? 0, 0, 1);
+      const waveBond = clamp(waveSample.bond ?? 0, 0, 1);
+      const distressBias = Math.max(clamp(this.interpretation_bias?.distress ?? 0, 0, 1), waveDistress);
+      const resourceBias = Math.max(clamp(this.interpretation_bias?.resource ?? 0, 0, 1), waveResource);
+      const bondConflict = Math.max(clamp(this.interpretation_bias?.bond ?? 0, 0, 1), waveBond);
       const resourceWeight = getSignalWeight('resource');
       const distressWeight = getSignalWeight('distress');
       const bondWeight = getSignalWeight('bond');
@@ -327,7 +335,9 @@ export function createBundleClass(context) {
         });
       }
       const baseNoise = (CONFIG.aiExploreNoiseBase + CONFIG.aiExploreNoiseGain * f) * hungerAmp * bereaveMul;
-      const noise = baseNoise * distressMul;
+      const waveNoiseBoost = 1 + waveDistress * 0.5;
+      const waveNoiseDamp = Math.max(0.25, 1 - (waveResource * 0.45 + waveBond * 0.35));
+      const noise = baseNoise * distressMul * waveNoiseBoost * waveNoiseDamp;
       const resourceVisibleFactor = resourceVisible ? 1.0 : 1.8;
       dx += (TcRandom.random() - 0.5) * noise * resourceVisibleFactor;
       dy += (TcRandom.random() - 0.5) * noise * resourceVisibleFactor;
@@ -635,6 +645,16 @@ export function createBundleClass(context) {
         ? Math.hypot(resource.x - this.x, resource.y - this.y) <= this.currentSensoryRange
         : false;
 
+      let waveSample = null;
+      if (ParticipationManager && typeof ParticipationManager.sampleWaveStrengths === 'function') {
+        waveSample = ParticipationManager.sampleWaveStrengths({
+          x: this.x,
+          y: this.y,
+          radius: this.currentSensoryRange
+        });
+      }
+      this.participationWaveSample = waveSample;
+
       if (canSeeResource || ticksSinceCollect <= CONFIG.aiFrustrationSightGrace) {
         this.frustration = Math.max(0, this.frustration - CONFIG.aiFrustrationDecayRate * dt);
       } else if (lowTrail) {
@@ -642,6 +662,30 @@ export function createBundleClass(context) {
         const h = clamp(this.hunger, 0, 1);
         const hungerAmp = 1 + (CONFIG.hungerFrustrationAmp - 1) * h;
         this.frustration = Math.min(1, this.frustration + CONFIG.aiFrustrationBuildRate * hungerAmp * dt);
+      }
+
+      if (waveSample) {
+        const resourceRelief = clamp(waveSample.resource ?? 0, 0, 1);
+        const bondRelief = clamp(waveSample.bond ?? 0, 0, 1);
+        const distressPressure = clamp(waveSample.distress ?? 0, 0, 1);
+
+        if (resourceRelief > 0) {
+          const hungerFactor = 0.5 + 0.5 * clamp(this.hunger, 0, 1);
+          const reliefRate = CONFIG.aiFrustrationDecayRate * hungerFactor;
+          this.frustration = Math.max(0, this.frustration - reliefRate * resourceRelief * dt);
+        }
+
+        if (bondRelief > 0) {
+          const reliefRate = CONFIG.aiFrustrationDecayRate * 0.35;
+          this.frustration = Math.max(0, this.frustration - reliefRate * bondRelief * dt);
+        }
+
+        if (distressPressure > 0 && !canSeeResource) {
+          const pressureGain = CONFIG.aiFrustrationBuildRate * (0.4 + 0.6 * clamp(this.hunger, 0, 1));
+          this.frustration = Math.min(1, this.frustration + pressureGain * distressPressure * dt);
+        }
+      } else {
+        this.participationWaveSample = null;
       }
     }
 
