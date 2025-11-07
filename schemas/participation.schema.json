@@ -1,0 +1,68 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://slimetest.local/schemas/participation.schema.json",
+  "title": "Participation Configuration",
+  "description": "Configuration surface for participation gating and falloff behaviour across cooperative modes.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "enabled": {
+      "type": "boolean",
+      "description": "Global toggle controlling whether participation logic is active.",
+      "default": false
+    },
+    "debugLog": {
+      "type": "boolean",
+      "description": "Emit verbose participation diagnostics to the console when enabled.",
+      "default": false
+    },
+    "modes": {
+      "type": "object",
+      "description": "Per-mode tuning for participation emission strength, decay, and radius falloff.",
+      "default": {
+        "resource": {
+          "strength": 1.0,
+          "decay": 0.12,
+          "radius": 220
+        },
+        "distress": {
+          "strength": 1.35,
+          "decay": 0.18,
+          "radius": 280
+        },
+        "bond": {
+          "strength": 0.85,
+          "decay": 0.1,
+          "radius": 200
+        }
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "strength": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Relative amplitude applied when participating in this mode.",
+            "default": 1.0
+          },
+          "decay": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Per-second decay factor applied to participation strength.",
+            "default": 0.12
+          },
+          "radius": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Effective influence radius in pixels for this participation mode.",
+            "default": 220
+          }
+        },
+        "required": ["strength", "decay", "radius"]
+      }
+    }
+  },
+  "required": ["enabled", "debugLog", "modes"]
+}

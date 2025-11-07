@@ -493,6 +493,29 @@ export const CONFIG = {
     }
   },
 
+  // === Participation Modes (channel gating & falloff) ===
+  participation: {
+    enabled: false,
+    debugLog: false,
+    modes: {
+      resource: {
+        strength: 1.0,
+        decay: 0.12,
+        radius: 220
+      },
+      distress: {
+        strength: 1.35,
+        decay: 0.18,
+        radius: 280
+      },
+      bond: {
+        strength: 0.85,
+        decay: 0.1,
+        radius: 200
+      }
+    }
+  },
+
   // === Bond Loss Signals ===
   bondLoss: {
     onDeathExploreBoost: 1.0,     // Extra exploration noise multiplier when a bonded partner dies
@@ -760,6 +783,19 @@ export const CONFIG_SCHEMA = {
     "signal.channelWeights.distress": { label: "Distress channel weight", min: 0, max: 5, step: 0.01 },
     "signal.channelWeights.bond": { label: "Bond channel weight", min: 0, max: 5, step: 0.01 },
   },
+  Participation: {
+    "participation.enabled": { label: "Enable participation", type: "boolean" },
+    "participation.debugLog": { label: "Debug logging", type: "boolean" },
+    "participation.modes.resource.strength": { label: "Resource strength", min: 0, max: 5, step: 0.01 },
+    "participation.modes.resource.decay": { label: "Resource decay", min: 0, max: 1, step: 0.01 },
+    "participation.modes.resource.radius": { label: "Resource radius (px)", min: 0, max: 1000, step: 5 },
+    "participation.modes.distress.strength": { label: "Distress strength", min: 0, max: 5, step: 0.01 },
+    "participation.modes.distress.decay": { label: "Distress decay", min: 0, max: 1, step: 0.01 },
+    "participation.modes.distress.radius": { label: "Distress radius (px)", min: 0, max: 1000, step: 5 },
+    "participation.modes.bond.strength": { label: "Bond strength", min: 0, max: 5, step: 0.01 },
+    "participation.modes.bond.decay": { label: "Bond decay", min: 0, max: 1, step: 0.01 },
+    "participation.modes.bond.radius": { label: "Bond radius (px)", min: 0, max: 1000, step: 5 },
+  },
   "Bond Loss": {
     "bondLoss.onDeathExploreBoost": { label: "On-death explore boost", min: 0, max: 10, step: 0.01 },
     "bondLoss.onDeathBoostDuration": { label: "On-death boost duration", min: 0, max: 10000, step: 10 },
@@ -1002,6 +1038,19 @@ const CONFIG_HINTS = {
   "signal.channelWeights.resource": "Weight applied when resource signals steer agents.",
   "signal.channelWeights.distress": "Weight applied when distress signals amplify exploration noise.",
   "signal.channelWeights.bond": "Weight applied when bond signals dampen cooperative guidance.",
+
+  // Participation
+  "participation.enabled": "Enable channel participation gating and falloff.",
+  "participation.debugLog": "Log participation decisions for debugging.",
+  "participation.modes.resource.strength": "Emission strength for resource participation mode.",
+  "participation.modes.resource.decay": "Per-second decay applied to resource participation commitments.",
+  "participation.modes.resource.radius": "Effective radius in pixels for resource participation influence.",
+  "participation.modes.distress.strength": "Emission strength when agents broadcast distress participation.",
+  "participation.modes.distress.decay": "Per-second decay applied to distress participation commitments.",
+  "participation.modes.distress.radius": "Effective radius in pixels for distress participation influence.",
+  "participation.modes.bond.strength": "Emission strength for cooperative bond participation.",
+  "participation.modes.bond.decay": "Per-second decay applied to bond participation commitments.",
+  "participation.modes.bond.radius": "Effective radius in pixels for bond participation influence.",
 
   // Bond loss
   "bondLoss.onDeathExploreBoost": "Exploration boost after a bonded partner dies.",

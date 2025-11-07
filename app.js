@@ -122,6 +122,22 @@ import { collectResource } from './src/systems/resourceSystem.js';
       const value = cfg?.activationThreshold;
       return clamp(Number.isFinite(value) ? value : 0.05, 0, 1);
     };
+    const getParticipationConfig = () => CONFIG.participation || {};
+    const getParticipationModeConfig = (mode) => {
+      const participation = getParticipationConfig();
+      if (!mode) return participation;
+      return participation?.modes?.[mode] || null;
+    };
+    const isParticipationEnabled = () => !!getParticipationConfig().enabled;
+
+    if (typeof window !== 'undefined') {
+      window.CONFIG = CONFIG;
+      window.participationConfig = {
+        getConfig: getParticipationConfig,
+        getModeConfig: getParticipationModeConfig,
+        isEnabled: isParticipationEnabled
+      };
+    }
 
     // Generate color for agent based on ID (supports unlimited agents)
     const getAgentColor = (id, alive = true) => {
