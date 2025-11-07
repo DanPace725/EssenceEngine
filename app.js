@@ -131,6 +131,78 @@ import { collectResource } from './src/systems/resourceSystem.js';
     };
     const isParticipationEnabled = () => !!getParticipationConfig().enabled;
 
+    const participationLogger = () => (CONFIG?.participation?.debugLog && typeof console !== 'undefined') ? console : null;
+
+    const applyChiDelta = ({ bundle, delta, reason = 'participation-energy' }) => {
+      if (!bundle || !Number.isFinite(delta) || delta === 0) {
+        return 0;
+      }
+
+      const current = Number.isFinite(bundle.chi) ? bundle.chi : 0;
+      const minChi = 0;
+      const maxChi = Number.isFinite(CONFIG?.maxChi) ? CONFIG.maxChi : Infinity;
+      const next = Math.min(maxChi, Math.max(minChi, current + delta));
+      const applied = next - current;
+
+      if (applied === 0) {
+        return 0;
+      }
+
+      bundle.chi = next;
+
+      const logger = participationLogger();
+      if (logger && typeof logger.debug === 'function') {
+        logger.debug(
+          `[Participation][Energy] ${reason}: agent ${bundle.id} Δχ=${applied.toFixed(3)} (requested ${delta.toFixed(3)})`
+        );
+      }
+
+      return applied;
+    };
+
+    const applyChiGain = ({ bundle, amount, reason }) => {
+      const gain = Math.max(0, Number.isFinite(amount) ? amount : 0);
+      return applyChiDelta({ bundle, delta: gain, reason });
+    };
+
+    const applyChiDrain = ({ bundle, amount, reason }) => {
+      const drain = Math.max(0, Number.isFinite(amount) ? amount : 0);
+      return applyChiDelta({ bundle, delta: -drain, reason });
+    };
+
+    const isEnergyParticipationActive = () => {
+      if (!isParticipationEnabled()) return false;
+      if (!ParticipationManager || typeof ParticipationManager.sampleEnergy !== 'function') return false;
+      const state = ParticipationManager.state || {};
+      if (!state.isActive) return false;
+      return state.mode === 'energy';
+    };
+
+    const applyParticipationEnergy = (bundle) => {
+      if (!bundle || !bundle.alive) return 0;
+      if (!isEnergyParticipationActive()) return 0;
+
+      const delta = ParticipationManager.sampleEnergy(bundle);
+      if (!Number.isFinite(delta) || Math.abs(delta) <= 1e-6) {
+        return 0;
+      }
+
+      return applyChiDelta({ bundle, delta, reason: 'participation-energy' });
+    };
+
+    const resetParticipationEnergy = ({ clearFields = false } = {}) => {
+      if (!ParticipationManager) return;
+      if (typeof ParticipationManager.setActive === 'function') {
+        ParticipationManager.setActive(false);
+      }
+      if (clearFields && typeof ParticipationManager.clearActiveFieldEntries === 'function') {
+        ParticipationManager.clearActiveFieldEntries();
+      }
+      if (typeof ParticipationManager.resetTimers === 'function') {
+        ParticipationManager.resetTimers();
+      }
+    };
+
     ParticipationManager.setConfig(getParticipationConfig);
 
     if (typeof window !== 'undefined') {
@@ -569,6 +641,40 @@ import { collectResource } from './src/systems/resourceSystem.js';
       Resource,
       getPerformanceNow: () => performance.now()
     });
+    const setWorldPaused = (paused) => {
+      const next = Boolean(paused);
+      if (World.paused === next) {
+        if (!next && ParticipationManager) {
+          // Resume clears timers without forcing active state
+          if (typeof ParticipationManager.resetTimers === 'function') {
+            ParticipationManager.resetTimers();
+          }
+        }
+        return World.paused;
+      }
+
+      World.paused = next;
+
+      if (next) {
+        resetParticipationEnergy({ clearFields: true });
+      } else if (ParticipationManager && typeof ParticipationManager.resetTimers === 'function') {
+        ParticipationManager.resetTimers();
+      }
+
+      return World.paused;
+    };
+
+    World.setPaused = setWorldPaused;
+    World.togglePause = () => setWorldPaused(!World.paused);
+
+    const originalWorldReset = World.reset.bind(World);
+    World.reset = (...args) => {
+      setWorldPaused(false);
+      const result = originalWorldReset(...args);
+      resetParticipationEnergy({ clearFields: true });
+      return result;
+    };
+
     World.reset();
 
     // Expose World globally for console access
@@ -598,7 +704,7 @@ import { collectResource } from './src/systems/resourceSystem.js';
       calculateAdaptiveReward,
       getGlobalTick: () => globalTick,
       incrementGlobalTick: () => { globalTick += 1; },
-      setWorldPaused: (paused) => { World.paused = paused; },
+      setWorldPaused,
       onLearningModeChange: (mode) => {
         if (mode === 'train') {
           World.bundles.forEach((b) => (b.useController = true));
@@ -1116,10 +1222,24 @@ import { collectResource } from './src/systems/resourceSystem.js';
         }
       }
 
+      let totalEnergyDelta = 0;
       World.bundles.forEach((bundle) => {
         const nearestResource = World.getNearestResource(bundle);
         bundle.update(dt, nearestResource);
+        const applied = applyParticipationEnergy(bundle);
+        if (applied !== 0) {
+          totalEnergyDelta += applied;
+        }
       });
+
+      if (totalEnergyDelta !== 0) {
+        const logger = participationLogger();
+        if (logger && typeof logger.debug === 'function') {
+          logger.debug(
+            `[Participation][Energy] Tick total Δχ=${totalEnergyDelta.toFixed(3)}`
+          );
+        }
+      }
 
       if (tickContext) {
         TcScheduler.runPhase('compute', tickContext);

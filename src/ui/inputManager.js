@@ -140,7 +140,13 @@ export function initializeInputManager({
     switch (e.code) {
       case 'Space':
         if (world) {
-          world.paused = !world.paused;
+          if (typeof world.togglePause === 'function') {
+            world.togglePause();
+          } else if (typeof world.setPaused === 'function') {
+            world.setPaused(!world.paused);
+          } else {
+            world.paused = !world.paused;
+          }
           e.preventDefault();
         }
         break;
