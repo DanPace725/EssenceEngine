@@ -96,6 +96,10 @@ export class TrainingUI {
       </div>
       <button id="use-policy" style="margin: 5px 0; display: none;">✅ Use This Policy</button>
       <button id="test-policy" style="margin: 5px 0;">🎮 Test Best Policy</button>
+      <div style="margin-top: 10px; border-top: 1px solid #333; padding-top: 10px;">
+        <div style="font-size: 10px; color: #888; margin-bottom: 5px;">Metrics Export:</div>
+        <button id="export-metrics" style="margin: 5px 0;">📊 Export Metrics JSON</button>
+      </div>
     `;
     this.panel.appendChild(policySection);
     
@@ -149,8 +153,6 @@ export class TrainingUI {
       if (this.callbacks.onStopTraining) {
         this.callbacks.onStopTraining();
       }
-      document.getElementById('start-training').disabled = false;
-      document.getElementById('stop-training').disabled = true;
     });
     
     document.getElementById('reset-learner')?.addEventListener('click', () => {
@@ -183,6 +185,12 @@ export class TrainingUI {
     document.getElementById('use-policy')?.addEventListener('click', () => {
       if (this.callbacks.onUsePolicy) {
         this.callbacks.onUsePolicy();
+      }
+    });
+    
+    document.getElementById('export-metrics')?.addEventListener('click', () => {
+      if (this.callbacks.onExportMetrics) {
+        this.callbacks.onExportMetrics();
       }
     });
   }

@@ -11,6 +11,7 @@ This index provides an overview of the Essence Engine documentation structure. D
 - [Training Guide](how-to/TRAINING_GUIDE.md) – Covers the in-app control panel, generation workflow, and CEM learning loop from the operator perspective
 - [Multi-Agent Guide](how-to/MULTI_AGENT_GUIDE.md) – Explains the shared-policy setup, reward aggregation, and cooperation dynamics
 - [Policy Analyzer Guide](how-to/POLICY_ANALYZER_GUIDE.md) – How to analyze and compare trained policies
+- [Debug Mode Guide](how-to/DEBUG_MODE_GUIDE.md) – Isolated feature testing with debug profiles
 - [Participation Guide](how-to/PARTICIPATION_GUIDE.md) – Interactive agent guidance with mouse/pointer input
 - [Scent Gradient Guide](how-to/SCENT_GRADIENT_GUIDE.md) – Using scent gradients for navigation
 - [Plant Ecology Guide](how-to/PLANT_ECOLOGY_GUIDE.md) – Understanding the plant ecology system

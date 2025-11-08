@@ -1,0 +1,95 @@
+{
+  "name": "Debug: Minimal Baseline",
+  "description": "Bare minimum settings with most systems disabled. Use as a starting point for isolated feature testing.",
+  "snapshot": {
+    "version": 1,
+    "ts": 1699564800000,
+    "params": {
+      "debug": true,
+      
+      "_comment_metabolism": "Basic metabolism - agents need energy",
+      "startChi": 50,
+      "baseDecayPerSecond": 0.05,
+      "moveSpeedPxPerSec": 100,
+      "moveCostPerSecond": 0.2,
+      "rewardChi": 15,
+      
+      "_comment_resources": "Simple static resources",
+      "resourceRadius": 10,
+      "bundleSize": 40,
+      "resourceDynamicCount": false,
+      "resourceCount": 20,
+      "resourceScaleWithAgents": false,
+      
+      "_comment_ecology_disabled": "Plant ecology OFF for clean testing",
+      "plantEcology.enabled": false,
+      
+      "_comment_rewards_basic": "Fixed rewards only",
+      "adaptiveReward.enabled": false,
+      
+      "_comment_trails_minimal": "Trails visible but not diffusing",
+      "trailCell": 20,
+      "depositPerSec": 1.0,
+      "evapPerSec": 0.1,
+      "diffusePerSec": 0,
+      "enableDiffusion": false,
+      "renderTrail": true,
+      "residualGainPerSec": 0,
+      "residualCapPerTick": 0,
+      "trailCooldownTicks": 0,
+      "ownTrailPenalty": 0,
+      
+      "_comment_autonomy": "Manual control for testing",
+      "autoMove": false,
+      "controls.autoMove": false,
+      
+      "_comment_sensing_basic": "Simple sensing without extensions",
+      "aiSensoryRangeBase": 150,
+      "aiSensoryRangeMax": 150,
+      "aiSenseRangePerChi": 0,
+      "aiSenseBiasFromFrustr": 0,
+      "aiSenseSlewPerSec": 1000,
+      
+      "_comment_walls_minimal": "Basic wall avoidance",
+      "aiWallAvoidMargin": 50,
+      "aiWallAvoidStrength": 1.0,
+      "enableAgentCollision": false,
+      
+      "_comment_behavior_simple": "No exploration noise or trail following",
+      "aiExploreNoiseBase": 0,
+      "aiExploreNoiseGain": 0,
+      "aiTrailFollowingNear": 0,
+      "aiTrailFollowingFar": 0,
+      "aiSampleDistance": 0,
+      
+      "_comment_frustration_off": "No frustration mechanics",
+      "aiFrustrationBuildRate": 0,
+      "aiFrustrationDecayRate": 0,
+      "aiFrustrationSightGrace": 0,
+      "aiFrustrationLowTrail": 0,
+      "aiSurgeMax": 0,
+      "aiTurnRateBase": 5,
+      "aiTurnRateGain": 0,
+      
+      "_comment_tc_off": "Turing Complete features disabled",
+      "tc.enabled": false,
+      
+      "_comment_hunger_off": "No hunger system",
+      "hungerBuildRate": 0,
+      "hungerDecayOnCollect": 0,
+      
+      "_comment_scent_off": "Scent gradient disabled",
+      "scentGradient.enabled": false,
+      
+      "_comment_signals_off": "Signal fields disabled",
+      "signal.enabled": false,
+      
+      "_comment_participation_off": "Participation disabled by default",
+      "participation.enabled": false,
+      
+      "_comment_mitosis_off": "No reproduction",
+      "mitosis.enabled": false
+    }
+  }
+}
+

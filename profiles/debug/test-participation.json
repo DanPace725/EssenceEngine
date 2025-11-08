@@ -1,0 +1,99 @@
+{
+  "name": "Debug: Participation Only",
+  "description": "Minimal baseline + participation enabled. Test if agents respond to mouse guidance without interference from other steering systems.",
+  "snapshot": {
+    "version": 1,
+    "ts": 1699564800000,
+    "params": {
+      "debug": true,
+      
+      "_comment_metabolism": "Basic metabolism",
+      "startChi": 100,
+      "baseDecayPerSecond": 0.02,
+      "moveSpeedPxPerSec": 120,
+      "moveCostPerSecond": 0.1,
+      "rewardChi": 15,
+      
+      "_comment_resources": "Sparse resources so agents don't auto-navigate",
+      "resourceRadius": 10,
+      "bundleSize": 40,
+      "resourceDynamicCount": false,
+      "resourceCount": 5,
+      "resourceScaleWithAgents": false,
+      
+      "_comment_ecology_disabled": "Plant ecology OFF",
+      "plantEcology.enabled": false,
+      
+      "_comment_rewards_basic": "Fixed rewards",
+      "adaptiveReward.enabled": false,
+      
+      "_comment_trails_visible": "Show trails for visual feedback",
+      "trailCell": 20,
+      "depositPerSec": 2.0,
+      "evapPerSec": 0.15,
+      "diffusePerSec": 0,
+      "enableDiffusion": false,
+      "renderTrail": true,
+      "residualGainPerSec": 0,
+      "residualCapPerTick": 0,
+      "trailCooldownTicks": 0,
+      "ownTrailPenalty": 0,
+      
+      "_comment_autonomy": "Auto mode ON so agents can respond",
+      "autoMove": true,
+      "controls.autoMove": true,
+      
+      "_comment_sensing_basic": "Moderate sensing range",
+      "aiSensoryRangeBase": 200,
+      "aiSensoryRangeMax": 200,
+      "aiSenseRangePerChi": 0,
+      "aiSenseBiasFromFrustr": 0,
+      "aiSenseSlewPerSec": 1000,
+      
+      "_comment_walls": "Wall avoidance enabled",
+      "aiWallAvoidMargin": 50,
+      "aiWallAvoidStrength": 1.0,
+      "enableAgentCollision": false,
+      
+      "_comment_behavior_minimal": "Tiny exploration so agents move",
+      "aiExploreNoiseBase": 0.1,
+      "aiExploreNoiseGain": 0.05,
+      "aiTrailFollowingNear": 0,
+      "aiTrailFollowingFar": 0,
+      "aiSampleDistance": 0,
+      
+      "_comment_frustration_off": "No frustration",
+      "aiFrustrationBuildRate": 0,
+      "aiFrustrationDecayRate": 0,
+      "aiFrustrationSightGrace": 0,
+      "aiFrustrationLowTrail": 0,
+      "aiSurgeMax": 0,
+      "aiTurnRateBase": 5,
+      "aiTurnRateGain": 0,
+      
+      "_comment_other_systems_off": "Everything else disabled",
+      "tc.enabled": false,
+      "hungerBuildRate": 0,
+      "hungerDecayOnCollect": 0,
+      "scentGradient.enabled": false,
+      "signal.enabled": false,
+      "mitosis.enabled": false,
+      
+      "_comment_participation_ON": "PARTICIPATION ENABLED - This is what we're testing!",
+      "participation.enabled": true,
+      "participation.debugLog": true,
+      "participation.maxForceFraction": 3.0,
+      "participation.visualRadiusScale": 0.2,
+      "participation.modes.resource.strength": 10.0,
+      "participation.modes.resource.decay": 0.05,
+      "participation.modes.resource.radius": 400,
+      "participation.modes.distress.strength": 12.0,
+      "participation.modes.distress.decay": 0.08,
+      "participation.modes.distress.radius": 450,
+      "participation.modes.bond.strength": 8.0,
+      "participation.modes.bond.decay": 0.04,
+      "participation.modes.bond.radius": 350
+    }
+  }
+}
+

@@ -149,7 +149,12 @@ export function createResourceClass(context) {
         const margin = 60;
         const width = Math.max(margin * 2, viewportWidth() || canvasWidth());
         const height = Math.max(margin * 2, viewportHeight() || canvasHeight());
-        this.x = margin + TcRandom.random() * (width - 2 * margin);
+        
+        // Exclude config panel area (360px on right side when visible)
+        const configPanelWidth = 360;
+        const rightMargin = margin + configPanelWidth; // Extra margin for config panel
+        
+        this.x = margin + TcRandom.random() * (width - margin - rightMargin);
         this.y = margin + TcRandom.random() * (height - 2 * margin);
       }
 

@@ -97,6 +97,7 @@ test/           # Unit tests for core systems
 
 Visit `docs/INDEX.md` for detailed guides including:
 
+- **Debug Mode** - Test features in isolation with pre-configured debug profiles
 - Architecture documentation
 - System-specific guides (resources, sensing, training, etc.)
 - How-to guides for common tasks

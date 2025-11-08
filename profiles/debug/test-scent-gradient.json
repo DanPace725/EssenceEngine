@@ -1,0 +1,93 @@
+{
+  "name": "Debug: Scent Gradient Only",
+  "description": "Minimal baseline + scent gradient. Test gradient-based navigation without other steering interference.",
+  "snapshot": {
+    "version": 1,
+    "ts": 1699564800000,
+    "params": {
+      "debug": true,
+      
+      "_comment_metabolism": "Good energy reserves",
+      "startChi": 80,
+      "baseDecayPerSecond": 0.05,
+      "moveSpeedPxPerSec": 120,
+      "moveCostPerSecond": 0.15,
+      "rewardChi": 15,
+      
+      "_comment_resources": "Moderate resources",
+      "resourceRadius": 10,
+      "bundleSize": 40,
+      "resourceDynamicCount": false,
+      "resourceCount": 15,
+      "resourceScaleWithAgents": false,
+      
+      "_comment_ecology_off": "No plant ecology",
+      "plantEcology.enabled": false,
+      
+      "_comment_rewards": "Fixed rewards",
+      "adaptiveReward.enabled": false,
+      
+      "_comment_trails": "Trails visible",
+      "trailCell": 20,
+      "depositPerSec": 1.0,
+      "evapPerSec": 0.1,
+      "diffusePerSec": 0,
+      "enableDiffusion": false,
+      "renderTrail": true,
+      "residualGainPerSec": 0,
+      "residualCapPerTick": 0,
+      "trailCooldownTicks": 0,
+      "ownTrailPenalty": 0,
+      
+      "_comment_autonomy": "Auto mode on",
+      "autoMove": true,
+      "controls.autoMove": true,
+      
+      "_comment_sensing": "Good sensing range",
+      "aiSensoryRangeBase": 250,
+      "aiSensoryRangeMax": 250,
+      "aiSenseRangePerChi": 0,
+      "aiSenseBiasFromFrustr": 0,
+      "aiSenseSlewPerSec": 1000,
+      
+      "_comment_walls": "Wall avoidance",
+      "aiWallAvoidMargin": 50,
+      "aiWallAvoidStrength": 1.0,
+      "enableAgentCollision": false,
+      
+      "_comment_behavior": "Minimal exploration",
+      "aiExploreNoiseBase": 0.15,
+      "aiExploreNoiseGain": 0.1,
+      "aiTrailFollowingNear": 0,
+      "aiTrailFollowingFar": 0,
+      "aiSampleDistance": 0,
+      
+      "_comment_frustration_off": "No frustration",
+      "aiFrustrationBuildRate": 0,
+      "aiFrustrationDecayRate": 0,
+      "aiFrustrationSightGrace": 0,
+      "aiFrustrationLowTrail": 0,
+      "aiSurgeMax": 0,
+      "aiTurnRateBase": 5,
+      "aiTurnRateGain": 0,
+      
+      "_comment_other_off": "Other systems disabled",
+      "tc.enabled": false,
+      "hungerBuildRate": 0,
+      "hungerDecayOnCollect": 0,
+      "signal.enabled": false,
+      "participation.enabled": false,
+      "mitosis.enabled": false,
+      
+      "_comment_scent_ON": "SCENT GRADIENT ENABLED - Test this!",
+      "scentGradient.enabled": true,
+      "scentGradient.maxRange": 400,
+      "scentGradient.falloffType": "inverse-square",
+      "scentGradient.strength": 2.0,
+      "scentGradient.showSubtleIndicator": true,
+      "scentGradient.rewardEnabled": false,
+      "scentGradient.densitySensingEnabled": false
+    }
+  }
+}
+

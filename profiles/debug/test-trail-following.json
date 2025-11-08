@@ -1,0 +1,86 @@
+{
+  "name": "Debug: Trail Following Only",
+  "description": "Test trail-following behavior with diffusion enabled. See if agents track and follow pheromone trails.",
+  "snapshot": {
+    "version": 1,
+    "ts": 1699564800000,
+    "params": {
+      "debug": true,
+      
+      "_comment_metabolism": "Energy for sustained movement",
+      "startChi": 70,
+      "baseDecayPerSecond": 0.08,
+      "moveSpeedPxPerSec": 110,
+      "moveCostPerSecond": 0.2,
+      "rewardChi": 20,
+      
+      "_comment_resources": "Scattered resources",
+      "resourceRadius": 10,
+      "bundleSize": 40,
+      "resourceDynamicCount": false,
+      "resourceCount": 12,
+      "resourceScaleWithAgents": false,
+      
+      "_comment_ecology_off": "No ecology",
+      "plantEcology.enabled": false,
+      
+      "_comment_rewards": "Fixed rewards",
+      "adaptiveReward.enabled": false,
+      
+      "_comment_trails_FOCUS": "TRAIL SYSTEM - This is what we're testing!",
+      "trailCell": 15,
+      "depositPerSec": 3.0,
+      "evapPerSec": 0.08,
+      "diffusePerSec": 0.4,
+      "enableDiffusion": true,
+      "renderTrail": true,
+      "residualGainPerSec": 2.0,
+      "residualCapPerTick": 1.5,
+      "trailCooldownTicks": 20,
+      "ownTrailPenalty": 0.5,
+      "ownTrailGraceAge": 50,
+      
+      "_comment_autonomy": "Auto on",
+      "autoMove": true,
+      "controls.autoMove": true,
+      
+      "_comment_sensing": "Good range",
+      "aiSensoryRangeBase": 200,
+      "aiSensoryRangeMax": 200,
+      "aiSenseRangePerChi": 0,
+      "aiSenseBiasFromFrustr": 0,
+      "aiSenseSlewPerSec": 1000,
+      
+      "_comment_walls": "Wall avoidance",
+      "aiWallAvoidMargin": 50,
+      "aiWallAvoidStrength": 1.0,
+      "enableAgentCollision": false,
+      
+      "_comment_behavior_TRAILS": "Trail following enabled strongly",
+      "aiExploreNoiseBase": 0.2,
+      "aiExploreNoiseGain": 0.1,
+      "aiTrailFollowingNear": 3.0,
+      "aiTrailFollowingFar": 2.0,
+      "aiSampleDistance": 80,
+      
+      "_comment_frustration_off": "No frustration",
+      "aiFrustrationBuildRate": 0,
+      "aiFrustrationDecayRate": 0,
+      "aiFrustrationSightGrace": 0,
+      "aiFrustrationLowTrail": 0,
+      "aiSurgeMax": 0,
+      "aiTurnRateBase": 5,
+      "aiTurnRateGain": 0,
+      
+      "_comment_other_off": "Other systems off",
+      "tc.enabled": false,
+      "hungerBuildRate": 0,
+      "hungerDecayOnCollect": 0,
+      "scentGradient.enabled": false,
+      "signal.enabled": false,
+      "participation.enabled": false,
+      "mitosis.enabled": false
+    }
+  }
+}
+

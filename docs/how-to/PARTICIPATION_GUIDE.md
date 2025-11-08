@@ -131,13 +131,27 @@ participation: {
 ```javascript
 participation: {
   enabled: true,
-  debugLog: false,  // Enable console logging for debugging
-  maxForceFraction: 0.35,  // Max participation force as fraction of agent speed
-  waveInterval: 0.28,      // Seconds between wave spawns when dragging
-  waveDistance: 36,        // Pixels moved before spawning next wave
-  waveGrowthRate: 320      // Pixels per second wave expansion
+  debugLog: false,           // Enable console logging for debugging
+  maxForceFraction: 0.35,    // Max participation force as fraction of agent speed
+                             // Default 0.35 = gentle nudge
+                             // Set to 2.0-3.0 for strong override in debug mode
+  visualRadiusScale: 1.0,    // Scale factor for visual circles (0.2 = 20% size)
+                             // Affects visuals only, not actual influence area
+  waveInterval: 0.28,        // Seconds between wave spawns when dragging
+  waveDistance: 36,          // Pixels moved before spawning next wave
+  waveGrowthRate: 320        // Pixels per second wave expansion
 }
 ```
+
+**Key Parameter: `maxForceFraction`**
+
+This is the most important tuning parameter:
+- **0.35 (default)** - Participation is a gentle nudge, agents still prioritize their own goals
+- **1.0** - Participation force equals agent's normal movement force
+- **2.0-3.0** - Participation strongly overrides autonomous behavior (good for debug/demonstration)
+- **Higher** - Near-total control, agents ignore resources and follow cursor precisely
+
+For testing/debugging, set this high (2.0+) along with high strength values.
 
 ## Integration with Other Systems
 

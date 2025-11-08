@@ -498,21 +498,23 @@ export const CONFIG = {
   participation: {
     enabled: false,
     debugLog: false,
+    maxForceFraction: 0.35,  // Max participation force as fraction of agent speed (0.35 = 35%)
+    visualRadiusScale: 1.0,  // Scale factor for visual circles (1.0 = actual radius, 0.2 = 20% size)
     modes: {
       resource: {
         strength: 1.0,
-        decay: 0.12,
-        radius: 220
+        decay: 1.0,
+        radius: 80
       },
       distress: {
         strength: 1.35,
-        decay: 0.18,
-        radius: 280
+        decay: 1.2,
+        radius: 100
       },
       bond: {
         strength: 0.85,
-        decay: 0.1,
-        radius: 200
+        decay: 0.9,
+        radius: 70
       }
     }
   },
@@ -790,15 +792,17 @@ export const CONFIG_SCHEMA = {
   Participation: {
     "participation.enabled": { label: "Enable participation", type: "boolean" },
     "participation.debugLog": { label: "Debug logging", type: "boolean" },
-    "participation.modes.resource.strength": { label: "Resource strength", min: 0, max: 5, step: 0.01 },
-    "participation.modes.resource.decay": { label: "Resource decay", min: 0, max: 1, step: 0.01 },
-    "participation.modes.resource.radius": { label: "Resource radius (px)", min: 0, max: 1000, step: 5 },
-    "participation.modes.distress.strength": { label: "Distress strength", min: 0, max: 5, step: 0.01 },
-    "participation.modes.distress.decay": { label: "Distress decay", min: 0, max: 1, step: 0.01 },
-    "participation.modes.distress.radius": { label: "Distress radius (px)", min: 0, max: 1000, step: 5 },
-    "participation.modes.bond.strength": { label: "Bond strength", min: 0, max: 5, step: 0.01 },
-    "participation.modes.bond.decay": { label: "Bond decay", min: 0, max: 1, step: 0.01 },
-    "participation.modes.bond.radius": { label: "Bond radius (px)", min: 0, max: 1000, step: 5 },
+    "participation.maxForceFraction": { label: "Max force fraction", min: 0, max: 5, step: 0.05 },
+    "participation.visualRadiusScale": { label: "Visual radius scale", min: 0.1, max: 2, step: 0.05 },
+    "participation.modes.resource.strength": { label: "Resource strength", min: 0, max: 20, step: 0.1 },
+    "participation.modes.resource.decay": { label: "Resource decay", min: 0, max: 2, step: 0.01 },
+    "participation.modes.resource.radius": { label: "Resource radius (px)", min: 0, max: 1000, step: 10 },
+    "participation.modes.distress.strength": { label: "Distress strength", min: 0, max: 20, step: 0.1 },
+    "participation.modes.distress.decay": { label: "Distress decay", min: 0, max: 2, step: 0.01 },
+    "participation.modes.distress.radius": { label: "Distress radius (px)", min: 0, max: 1000, step: 10 },
+    "participation.modes.bond.strength": { label: "Bond strength", min: 0, max: 20, step: 0.1 },
+    "participation.modes.bond.decay": { label: "Bond decay", min: 0, max: 2, step: 0.01 },
+    "participation.modes.bond.radius": { label: "Bond radius (px)", min: 0, max: 1000, step: 10 },
   },
   "Bond Loss": {
     "bondLoss.onDeathExploreBoost": { label: "On-death explore boost", min: 0, max: 10, step: 0.01 },
@@ -1128,12 +1132,15 @@ function findPathInSchema(path){
 
 function onConfigChanged() {
   // react to critical changes
+  if (typeof window === 'undefined') return;
+  
   // If trailCell changed, resize trail grid:
-  if (typeof Trail !== 'undefined' && Trail && Trail.cell !== CONFIG.trailCell) Trail.resize();
-  // You can add other "apply" hooks as needed.
-  applyTcConfig(CONFIG.tc || {});
-  loadTapeMachinesFromConfig(CONFIG.tc || {});
-  if (typeof window !== 'undefined' && window.SignalField) {
+  if (window.Trail && window.Trail.cell !== CONFIG.trailCell) {
+    window.Trail.resize();
+  }
+  
+  // If signal.cell or signal.channels changed, resize signal field:
+  if (window.SignalField) {
     const field = window.SignalField;
     const desiredCell = CONFIG.signal.cell;
     const desiredChannels = Math.max(1, Math.floor(CONFIG.signal.channels || 1));
@@ -1143,7 +1150,31 @@ function onConfigChanged() {
       field.resize(width, height, field.lastCtx);
     }
   }
-  if (typeof window !== 'undefined' && typeof window.updateParticipationStatusDisplay === 'function') {
+  
+  // If fertilityCell changed and plant ecology is enabled, recreate fertility field:
+  if (CONFIG.plantEcology.enabled) {
+    const field = window.FertilityField;
+    const desiredCell = CONFIG.plantEcology.fertilityCell;
+    // If field doesn't exist or cell size changed, recreate it
+    if (!field || (field && field.cell !== desiredCell)) {
+      // Get current canvas dimensions
+      const width = window.innerWidth || 1920;
+      const height = window.innerHeight || 1080;
+      // Recreate using FertilityGrid constructor
+      if (typeof window.FertilityGrid !== 'undefined') {
+        window.FertilityField = new window.FertilityGrid(width, height);
+      }
+    }
+  } else if (window.FertilityField) {
+    // If plant ecology was disabled, clear the field
+    window.FertilityField = null;
+  }
+  
+  // You can add other "apply" hooks as needed.
+  applyTcConfig(CONFIG.tc || {});
+  loadTapeMachinesFromConfig(CONFIG.tc || {});
+  
+  if (typeof window.updateParticipationStatusDisplay === 'function') {
     try {
       window.updateParticipationStatusDisplay(window.ParticipationManager?.state || {});
     } catch (err) {
@@ -1301,7 +1332,7 @@ function buildConfigPanel(){
   const groupsHost = wrap.querySelector("#cfg-groups");
   for (const [groupName, fields] of Object.entries(CONFIG_SCHEMA)) {
     const g = document.createElement("details");
-    g.open = true;
+    g.open = false;
     const sum = document.createElement("summary");
     sum.textContent = groupName;
     sum.style.margin = "8px 0";
@@ -1422,7 +1453,21 @@ function buildConfigPanel(){
   wrap.querySelector("#cfg-load").onclick = () => {
     const idx = Number(sel.value); if (isNaN(idx)) return;
     const list = ConfigIO.loadProfiles(); const p = list[idx];
-    if (p) { ConfigIO.apply(p.snapshot); name.value = p.name || ""; updateDirtyDot(); }
+    if (p) { 
+      ConfigIO.apply(p.snapshot); 
+      name.value = p.name || ""; 
+      updateDirtyDot();
+      
+      // Show success feedback
+      const loadBtn = wrap.querySelector("#cfg-load");
+      const originalText = loadBtn.textContent;
+      loadBtn.textContent = "✓ Loaded!";
+      loadBtn.style.background = "#2d5";
+      setTimeout(() => {
+        loadBtn.textContent = originalText;
+        loadBtn.style.background = "";
+      }, 1500);
+    }
   };
   wrap.querySelector("#cfg-save").onclick = () => {
     const snap = ConfigIO.snapshot();
@@ -1435,18 +1480,56 @@ function buildConfigPanel(){
     ConfigIO.saveProfiles(list); refreshProfiles();
     CURRENT_BASE_SNAPSHOT = snap; // saving makes current state the new base
     updateDirtyDot();
+    
+    // Show success feedback
+    const saveBtn = wrap.querySelector("#cfg-save");
+    const originalText = saveBtn.textContent;
+    saveBtn.textContent = "✓ Saved!";
+    saveBtn.style.background = "#2d5";
+    setTimeout(() => {
+      saveBtn.textContent = originalText;
+      saveBtn.style.background = "";
+    }, 1500);
   };
   wrap.querySelector("#cfg-del").onclick = () => {
     const idx = Number(sel.value); if (isNaN(idx)) return;
     const list = ConfigIO.loadProfiles(); if (!list[idx]) return;
+    const profileName = list[idx].name || 'profile';
+    
+    // Confirm deletion
+    if (!confirm(`Delete profile "${profileName}"?`)) return;
+    
     list.splice(idx,1); ConfigIO.saveProfiles(list); refreshProfiles();
+    
+    // Show success feedback
+    const delBtn = wrap.querySelector("#cfg-del");
+    const originalText = delBtn.textContent;
+    delBtn.textContent = "✓ Deleted";
+    delBtn.style.background = "#d52";
+    setTimeout(() => {
+      delBtn.textContent = originalText;
+      delBtn.style.background = "";
+    }, 1500);
   };
   wrap.querySelector("#cfg-exp").onclick = () => {
     const snap = ConfigIO.snapshot();
+    const filename = name.value?.trim() 
+      ? `${name.value.trim().replace(/[^a-z0-9-_]/gi, '_')}.json`
+      : "essence-config.json";
     const blob = new Blob([JSON.stringify(snap, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
-    const a = Object.assign(document.createElement("a"), { href:url, download:"essence-config.json" });
+    const a = Object.assign(document.createElement("a"), { href:url, download:filename });
     document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    
+    // Show success feedback
+    const expBtn = wrap.querySelector("#cfg-exp");
+    const originalText = expBtn.textContent;
+    expBtn.textContent = "✓ Exported!";
+    expBtn.style.background = "#2d5";
+    setTimeout(() => {
+      expBtn.textContent = originalText;
+      expBtn.style.background = "";
+    }, 1500);
   };
   wrap.querySelector("#cfg-imp").onclick = async () => {
     const input = document.createElement("input");
@@ -1454,8 +1537,57 @@ function buildConfigPanel(){
     input.onchange = async () => {
       const file = input.files?.[0]; if (!file) return;
       const text = await file.text();
-      try { const snap = JSON.parse(text); ConfigIO.apply(snap); updateDirtyDot(); }
-      catch { alert("Invalid JSON"); }
+      try { 
+        const data = JSON.parse(text);
+        
+        // Handle both formats:
+        // 1. Direct snapshot: { version, ts, params }
+        // 2. Profile format: { name, description, snapshot }
+        const snap = data.snapshot || data;
+        const profileName = data.name || file.name.replace('.json', '') || 'profile';
+        
+        ConfigIO.apply(snap); 
+        updateDirtyDot();
+        
+        // Show success feedback
+        const importBtn = wrap.querySelector("#cfg-imp");
+        const originalText = importBtn.textContent;
+        importBtn.textContent = "✓ Imported!";
+        importBtn.style.background = "#2d5";
+        setTimeout(() => {
+          importBtn.textContent = originalText;
+          importBtn.style.background = "";
+        }, 2000);
+        
+        // Update name field with imported profile name
+        if (name) {
+          name.value = profileName;
+        }
+        
+        // Ask if user wants to save to profiles list
+        if (confirm(`Profile "${profileName}" imported successfully!\n\nSave to your profiles list for quick access?`)) {
+          const list = ConfigIO.loadProfiles();
+          // Check if profile with same name exists
+          const existing = list.findIndex(p => p.name === profileName);
+          if (existing >= 0) {
+            list[existing] = { name: profileName, snapshot: snap };
+          } else {
+            list.push({ name: profileName, snapshot: snap });
+          }
+          ConfigIO.saveProfiles(list);
+          refreshProfiles();
+        }
+        
+        // Log for debugging
+        if (CONFIG.debug) {
+          console.log('[Config] Imported profile:', profileName);
+          console.log('[Config] Applied params:', Object.keys(snap.params || {}).length, 'parameters');
+        }
+      }
+      catch (err) { 
+        console.error('[Config] Import error:', err);
+        alert(`Invalid JSON: ${err.message}`); 
+      }
     };
     input.click();
   };
@@ -1506,10 +1638,22 @@ function togglePanel(force){
   const el = document.getElementById("config-panel") || buildConfigPanel();
   const node = document.getElementById("config-panel");
   if (!node) return;
+  const wasOpen = panelOpen;
   panelOpen = force ?? !panelOpen;
   node.style.display = panelOpen ? "block" : "none";
-
-  // Trigger canvas resize when panel visibility changes
+ 
+  // When opening the panel, ensure all sections are collapsed
+  if (panelOpen && !wasOpen) {
+    const groupsHost = node.querySelector("#cfg-groups");
+    if (groupsHost) {
+      groupsHost.querySelectorAll("details").forEach(details => {
+        details.open = false;
+      });
+    }
+  }
+  
+  // Resize canvas to account for panel width
+  // Trails are now preserved during resize, so this is safe to call
   if (typeof window.resizeCanvas === 'function') {
     window.resizeCanvas();
   }
@@ -1519,17 +1663,6 @@ function togglePanel(force){
 if (isBrowser) {
   window.addEventListener("keydown", (e) => {
     if (e.code === "KeyO") { togglePanel(); e.preventDefault(); }
-    // quick-load profiles 1..9
-    if (/Digit[1-9]/.test(e.code)) {
-      const idx = Number(e.code.slice(-1)) - 1;
-      const list = ConfigIO.loadProfiles();
-      if (list[idx]) { ConfigIO.apply(list[idx].snapshot); }
-    }
-    // Ctrl/Cmd+U: revert
-    if (e.code === "KeyU" && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      if (CURRENT_BASE_SNAPSHOT) ConfigIO.apply(CURRENT_BASE_SNAPSHOT);
-    }
   });
 }
 

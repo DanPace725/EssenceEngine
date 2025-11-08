@@ -26,11 +26,14 @@ These guides are written from the operator/user perspective and focus on:
 - [Own Trail Penalty Guide](OWN_TRAIL_PENALTY_GUIDE.md) - Trail penalty system
 - [Visual Indicators](VISUAL_INDICATORS.md) - Understanding UI elements
 
+### Development & Testing
+- [Debug Mode Guide](DEBUG_MODE_GUIDE.md) - **Isolated feature testing with debug profiles**
+- [Quick Test](QUICK_TEST.md) - Testing checklist
+
 ### Quick Starts
 - [Quick Start Adaptive Rewards](QUICK_START_ADAPTIVE_REWARDS.md) - Quick setup for adaptive rewards
 - [TC Browser Guide](TC_BROWSER_GUIDE.md) - Using Turing Complete features
 - [TC Resource Quickstart](TC_RESOURCE_QUICKSTART.md) - Quick start for TC resources
-- [Quick Test](QUICK_TEST.md) - Testing checklist
 
 For technical implementation details, see the [architecture documentation](../architecture/README.md).
 

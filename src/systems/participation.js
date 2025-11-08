@@ -623,6 +623,7 @@ function drawForceFields(ctx, config) {
   if (hasEntries) {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
+    const visualScale = Math.max(0.1, toFiniteNumber(config?.visualRadiusScale, 1.0));
     for (const entryRaw of entries) {
       const entry = entryRaw || {};
       const px = toFiniteNumber(entry.x ?? entry.position?.x, NaN);
@@ -636,17 +637,18 @@ function drawForceFields(ctx, config) {
       if (!(radius > 0)) {
         continue;
       }
+      const visualRadius = radius * visualScale;  // Scale the visual size
       const strength = Math.max(0, toFiniteNumber(entry.strength ?? modeConfig.strength, 0));
       const falloff = clamp01(strength / Math.max(radius, 1));
       const { r, g, b } = resolveModeColor(mode, config);
-      const gradient = ctx.createRadialGradient(px, py, 0, px, py, radius);
+      const gradient = ctx.createRadialGradient(px, py, 0, px, py, visualRadius);
       const innerAlpha = Math.min(0.45, 0.18 + falloff * 0.32);
       gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${innerAlpha})`);
       gradient.addColorStop(0.4, `rgba(${r}, ${g}, ${b}, ${innerAlpha * 0.6})`);
       gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
       ctx.fillStyle = gradient;
       ctx.beginPath();
-      ctx.arc(px, py, radius, 0, Math.PI * 2);
+      ctx.arc(px, py, visualRadius, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();
@@ -721,6 +723,7 @@ function drawSignalWaves(ctx, config) {
 
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
+  const visualScale = Math.max(0.1, toFiniteNumber(config?.visualRadiusScale, 1.0));
   for (const wave of state.signalWaves) {
     if (!wave || wave.intensity <= MIN_WAVE_INTENSITY) {
       continue;
@@ -730,7 +733,7 @@ function drawSignalWaves(ctx, config) {
       continue;
     }
     const { r, g, b } = wave.color || MODE_COLORS.resource;
-    const radius = Math.max(4, wave.radius);
+    const radius = Math.max(4, wave.radius * visualScale);  // Scale the visual size
     const fillGradient = ctx.createRadialGradient(wave.x, wave.y, radius * 0.35, wave.x, wave.y, radius);
     fillGradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${Math.min(0.4, alpha * 0.35)})`);
     fillGradient.addColorStop(0.75, `rgba(${r}, ${g}, ${b}, ${Math.min(0.25, alpha * 0.2)})`);
@@ -741,7 +744,7 @@ function drawSignalWaves(ctx, config) {
     ctx.fill();
 
     ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${Math.min(0.85, alpha * 0.9)})`;
-    ctx.lineWidth = 1.5 + alpha * 2.5;
+    ctx.lineWidth = (1.5 + alpha * 2.5) * visualScale;  // Scale line width too
     ctx.beginPath();
     ctx.arc(wave.x, wave.y, radius, 0, Math.PI * 2);
     ctx.stroke();

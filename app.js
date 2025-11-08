@@ -476,10 +476,20 @@ import { collectResource } from './src/systems/resourceSystem.js';
       img: null, offscreen: null,
   
       resize() {
+        // Preserve old dimensions and buffers
+        const oldW = this.w;
+        const oldH = this.h;
+        const oldBuf = this.buf;
+        const oldAuthorBuf = this.authorBuf;
+        const oldTimestampBuf = this.timestampBuf;
+        
+        // Calculate new dimensions
         this.cell = CONFIG.trailCell;
         this.w = Math.max(1, Math.floor(canvasWidth  / this.cell));
         this.h = Math.max(1, Math.floor(canvasHeight / this.cell));
         const len = this.w * this.h;
+        
+        // Create new buffers
         this.buf = new Float32Array(len);
         this.tmp = new Float32Array(len);
         this.snapshot = new Float32Array(len);
@@ -491,6 +501,21 @@ import { collectResource } from './src/systems/resourceSystem.js';
         this.offscreen = document.createElement('canvas');
         this.offscreen.width = this.w;
         this.offscreen.height = this.h;
+        
+        // Copy old data to new buffers (best effort)
+        if (oldBuf && oldW > 0 && oldH > 0) {
+          const copyW = Math.min(oldW, this.w);
+          const copyH = Math.min(oldH, this.h);
+          for (let y = 0; y < copyH; y++) {
+            for (let x = 0; x < copyW; x++) {
+              const oldIdx = y * oldW + x;
+              const newIdx = y * this.w + x;
+              this.buf[newIdx] = oldBuf[oldIdx];
+              if (oldAuthorBuf) this.authorBuf[newIdx] = oldAuthorBuf[oldIdx];
+              if (oldTimestampBuf) this.timestampBuf[newIdx] = oldTimestampBuf[oldIdx];
+            }
+          }
+        }
       },
       clear() {
         if (this.buf) this.buf.fill(0);
@@ -757,6 +782,10 @@ import { collectResource } from './src/systems/resourceSystem.js';
     // Expose World globally for console access
     if (typeof window !== 'undefined') {
       window.World = World;
+      window.Trail = Trail;
+      window.SignalField = SignalField;
+      window.FertilityField = FertilityField; // May be null if plant ecology disabled
+      window.FertilityGrid = FertilityGrid; // Expose class so config can recreate field
     }
 
     // ========================================================================
@@ -1556,6 +1585,11 @@ import { collectResource } from './src/systems/resourceSystem.js';
 
       if (inputState.showFertility && CONFIG.plantEcology.enabled && FertilityField) {
         FertilityField.draw(ctx);
+      }
+
+      if (inputState.showScentGradient && CONFIG.scentGradient.enabled) {
+        visualizeScentHeatmap(ctx, World.resources, 40);
+        visualizeScentGradient(ctx, World.resources, 80);
       }
 
       if (CONFIG.signal.enabled) {

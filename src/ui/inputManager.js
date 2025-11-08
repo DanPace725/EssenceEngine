@@ -194,6 +194,7 @@ export function initializeInputManager({
         break;
       case 'KeyG':
         state.showScentGradient = !state.showScentGradient;
+        console.log(`🌸 Scent gradient visualization ${state.showScentGradient ? 'ENABLED' : 'DISABLED'}`);
         break;
       case 'KeyM':
         if (CONFIG?.mitosis) {
@@ -213,15 +214,6 @@ export function initializeInputManager({
         else state.hudDisplayMode = 'full';
         console.log(`📊 HUD mode: ${state.hudDisplayMode.toUpperCase()}`);
         break;
-      case 'Digit1':
-      case 'Digit2':
-      case 'Digit3':
-      case 'Digit4': {
-        const index = Number(e.code.replace('Digit', '')) - 1;
-        const bundle = world?.bundles?.[index];
-        if (bundle) bundle.visible = !bundle.visible;
-        break;
-      }
       case 'KeyV':
         world?.bundles?.forEach((bundle) => {
           bundle.visible = !bundle.visible;

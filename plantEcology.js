@@ -350,8 +350,11 @@ export function getResourceSpawnLocation(fertilityGrid, width, height) {
   
   // Fallback: random spawn
   const margin = 60;
+  const configPanelWidth = 360;
+  const rightMargin = margin + configPanelWidth;
+  
   return {
-    x: margin + Math.random() * (width - 2 * margin),
+    x: margin + Math.random() * (width - margin - rightMargin),
     y: margin + Math.random() * (height - 2 * margin),
     fertility: 0.5
   };

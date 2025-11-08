@@ -1,0 +1,102 @@
+{
+  "name": "Debug: Mitosis Only",
+  "description": "Test agent reproduction mechanics. High energy resources and low costs to trigger mitosis frequently.",
+  "snapshot": {
+    "version": 1,
+    "ts": 1699564800000,
+    "params": {
+      "debug": true,
+      
+      "_comment_metabolism": "Easy to gain energy",
+      "startChi": 100,
+      "baseDecayPerSecond": 0.02,
+      "moveSpeedPxPerSec": 100,
+      "moveCostPerSecond": 0.05,
+      "rewardChi": 40,
+      
+      "_comment_resources": "Lots of resources",
+      "resourceRadius": 15,
+      "bundleSize": 40,
+      "resourceDynamicCount": false,
+      "resourceCount": 30,
+      "resourceScaleWithAgents": true,
+      "resourceBaseAbundance": 300,
+      "resourceCompetition": 0.5,
+      "resourceScaleMinimum": 30,
+      "resourceScaleMaximum": 100,
+      
+      "_comment_ecology_off": "No ecology",
+      "plantEcology.enabled": false,
+      
+      "_comment_rewards": "Fixed high rewards",
+      "adaptiveReward.enabled": false,
+      
+      "_comment_trails": "Trails visible",
+      "trailCell": 20,
+      "depositPerSec": 1.0,
+      "evapPerSec": 0.1,
+      "diffusePerSec": 0,
+      "enableDiffusion": false,
+      "renderTrail": true,
+      "residualGainPerSec": 0,
+      "residualCapPerTick": 0,
+      "trailCooldownTicks": 0,
+      "ownTrailPenalty": 0,
+      
+      "_comment_autonomy": "Auto on",
+      "autoMove": true,
+      "controls.autoMove": true,
+      
+      "_comment_sensing": "Good sensing",
+      "aiSensoryRangeBase": 250,
+      "aiSensoryRangeMax": 250,
+      "aiSenseRangePerChi": 0,
+      "aiSenseBiasFromFrustr": 0,
+      "aiSenseSlewPerSec": 1000,
+      
+      "_comment_walls": "Wall avoidance",
+      "aiWallAvoidMargin": 50,
+      "aiWallAvoidStrength": 1.0,
+      "enableAgentCollision": true,
+      "agentCollisionPushback": 0.5,
+      
+      "_comment_behavior": "Some exploration",
+      "aiExploreNoiseBase": 0.3,
+      "aiExploreNoiseGain": 0.2,
+      "aiTrailFollowingNear": 0,
+      "aiTrailFollowingFar": 0,
+      "aiSampleDistance": 0,
+      
+      "_comment_frustration_off": "No frustration",
+      "aiFrustrationBuildRate": 0,
+      "aiFrustrationDecayRate": 0,
+      "aiFrustrationSightGrace": 0,
+      "aiFrustrationLowTrail": 0,
+      "aiSurgeMax": 0,
+      "aiTurnRateBase": 5,
+      "aiTurnRateGain": 0,
+      
+      "_comment_other_off": "Other systems off",
+      "tc.enabled": false,
+      "hungerBuildRate": 0,
+      "hungerDecayOnCollect": 0,
+      "scentGradient.enabled": false,
+      "signal.enabled": false,
+      "participation.enabled": false,
+      
+      "_comment_mitosis_ON": "MITOSIS ENABLED - Test this!",
+      "mitosis.enabled": true,
+      "mitosis.threshold": 80,
+      "mitosis.costFraction": 0.45,
+      "mitosis.momentumInheritance": 0.5,
+      "mitosis.angularOffset": 45,
+      "mitosis.cooldown": 100,
+      "mitosis.maxPopulation": 50,
+      "mitosis.renderLineage": true,
+      "mitosis.lineageOpacity": 0.4,
+      "mitosis.limitPerBundle": true,
+      "mitosis.maxPerBundle": 10
+    }
+  }
+}
+

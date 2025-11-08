@@ -1,0 +1,97 @@
+{
+  "name": "Debug: Signal Fields Only",
+  "description": "Test signal field system in isolation. See how agents respond to multi-channel signals.",
+  "snapshot": {
+    "version": 1,
+    "ts": 1699564800000,
+    "params": {
+      "debug": true,
+      
+      "_comment_metabolism": "Basic metabolism",
+      "startChi": 80,
+      "baseDecayPerSecond": 0.06,
+      "moveSpeedPxPerSec": 115,
+      "moveCostPerSecond": 0.18,
+      "rewardChi": 15,
+      
+      "_comment_resources": "Some resources",
+      "resourceRadius": 10,
+      "bundleSize": 40,
+      "resourceDynamicCount": false,
+      "resourceCount": 10,
+      "resourceScaleWithAgents": false,
+      
+      "_comment_ecology_off": "No ecology",
+      "plantEcology.enabled": false,
+      
+      "_comment_rewards": "Fixed rewards",
+      "adaptiveReward.enabled": false,
+      
+      "_comment_trails": "Minimal trails",
+      "trailCell": 20,
+      "depositPerSec": 0.5,
+      "evapPerSec": 0.15,
+      "diffusePerSec": 0,
+      "enableDiffusion": false,
+      "renderTrail": true,
+      "residualGainPerSec": 0,
+      "residualCapPerTick": 0,
+      "trailCooldownTicks": 0,
+      "ownTrailPenalty": 0,
+      
+      "_comment_autonomy": "Auto on",
+      "autoMove": true,
+      "controls.autoMove": true,
+      
+      "_comment_sensing": "Good sensing",
+      "aiSensoryRangeBase": 220,
+      "aiSensoryRangeMax": 220,
+      "aiSenseRangePerChi": 0,
+      "aiSenseBiasFromFrustr": 0,
+      "aiSenseSlewPerSec": 1000,
+      
+      "_comment_walls": "Wall avoidance",
+      "aiWallAvoidMargin": 50,
+      "aiWallAvoidStrength": 1.0,
+      "enableAgentCollision": false,
+      
+      "_comment_behavior": "Some exploration",
+      "aiExploreNoiseBase": 0.2,
+      "aiExploreNoiseGain": 0.15,
+      "aiTrailFollowingNear": 0,
+      "aiTrailFollowingFar": 0,
+      "aiSampleDistance": 0,
+      
+      "_comment_frustration_off": "No frustration",
+      "aiFrustrationBuildRate": 0,
+      "aiFrustrationDecayRate": 0,
+      "aiFrustrationSightGrace": 0,
+      "aiFrustrationLowTrail": 0,
+      "aiSurgeMax": 0,
+      "aiTurnRateBase": 5,
+      "aiTurnRateGain": 0,
+      
+      "_comment_other_off": "Most systems off",
+      "tc.enabled": false,
+      "hungerBuildRate": 0,
+      "hungerDecayOnCollect": 0,
+      "scentGradient.enabled": false,
+      "participation.enabled": false,
+      "mitosis.enabled": false,
+      
+      "_comment_signals_ON": "SIGNAL FIELDS ENABLED - Test this!",
+      "signal.enabled": true,
+      "signal.channelCount": 3,
+      "signal.cellSize": 25,
+      "signal.diffusionRate": 0.3,
+      "signal.decayRate": 0.1,
+      "signal.renderChannels": true,
+      "signal.renderAlpha": 0.4,
+      "signal.emissionStrength": 1.5,
+      "signal.channelWeights.resource": 1.5,
+      "signal.channelWeights.distress": 1.0,
+      "signal.channelWeights.bond": 0.8
+    }
+  }
+}
+

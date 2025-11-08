@@ -1,5 +1,6 @@
 import { performSimulationStep } from './simulationLoop.js';
 import { collectResource } from '../systems/resourceSystem.js';
+import { MetricsTracker } from './metricsTracker.js';
 
 export function createTrainingModule({
   world,
@@ -30,6 +31,7 @@ export function createTrainingModule({
   let trainingManager = null;
   let stopTrainingFlag = false;
   let loadedPolicyInfo = null;
+  let lastMetricsHistory = null;
 
   function getLearningMode() {
     return learningMode;
@@ -91,6 +93,11 @@ export function createTrainingModule({
     let totalReward = 0;
     let episodeTicks = 0;
     const maxTicks = config.learning.episodeLength;
+    
+    // Initialize metrics tracker for this episode
+    const metricsTracker = new MetricsTracker();
+    const startTick = typeof getGlobalTick === 'function' ? getGlobalTick() : 0;
+    metricsTracker.init(world, trail, startTick);
 
     const capturePhase = ({ tickContext }) => {
       trail.captureSnapshot();
@@ -109,11 +116,23 @@ export function createTrainingModule({
         if (!bundle.alive) continue;
 
         const chiBeforeUpdate = bundle.chi;
+        const posBeforeUpdate = { x: bundle.x, y: bundle.y };
         const nearestResource = world.getNearestResource(bundle);
         bundle.update(dt, nearestResource);
 
         const chiSpent = Math.max(0, chiBeforeUpdate - bundle.chi);
         totalChiSpent += chiSpent;
+        
+        // Track movement for metrics
+        const dx = bundle.x - posBeforeUpdate.x;
+        const dy = bundle.y - posBeforeUpdate.y;
+        const speed = Math.hypot(dx, dy) / dt;
+        metricsTracker.onMove(dx, dy, speed);
+        
+        // Track chi spending
+        if (chiSpent > 0) {
+          metricsTracker.onChiSpend(chiSpent, 'agent-update');
+        }
 
         let collectedResource = false;
         for (const res of world.resources) {
@@ -133,6 +152,10 @@ export function createTrainingModule({
 
           collectedResource = result.collected;
           if (collectedResource) {
+            // Track chi reward from resource collection
+            const rewardAmount = config.rewardChi || 0;
+            const currentTick = typeof getGlobalTick === 'function' ? getGlobalTick() : 0;
+            metricsTracker.onChiReward(rewardAmount, 'resource', currentTick);
             break;
           }
         }
@@ -167,6 +190,10 @@ export function createTrainingModule({
         incrementGlobalTick();
       }
       episodeTicks += 1;
+      
+      // Update metrics tracker each tick
+      const currentTick = typeof getGlobalTick === 'function' ? getGlobalTick() : 0;
+      metricsTracker.step(world, trail, currentTick);
     };
 
     while (episodeTicks < maxTicks && world.bundles.some((b) => b.alive)) {
@@ -200,6 +227,10 @@ export function createTrainingModule({
     }
 
     episodeManager.endEpisode(world.bundles[0]?.rewardTracker);
+    
+    // Store metrics history from this episode
+    lastMetricsHistory = metricsTracker.getHistory();
+    
     return totalReward;
   }
 
@@ -297,6 +328,22 @@ export function createTrainingModule({
         setWorldPaused(false);
       }
       console.log('Stop training requested');
+      
+      // Update UI immediately
+      if (documentHandle) {
+        const startBtn = documentHandle.getElementById('start-training');
+        const stopBtn = documentHandle.getElementById('stop-training');
+        if (startBtn) startBtn.disabled = false;
+        if (stopBtn) stopBtn.disabled = true;
+      }
+      
+      ui.updateStats({
+        status: 'Training Stopped',
+        generation: learner.generation,
+        bestReward: learner.bestReward,
+        meanReward: learner.meanReward || 0,
+        populationSize: config.learning.populationSize
+      });
     });
 
     ui.on('onResetLearner', () => {
@@ -410,7 +457,59 @@ export function createTrainingModule({
       }
     });
 
+    ui.on('onExportMetrics', () => {
+      const metricsData = getMetricsExport();
+      
+      if (!metricsData) {
+        alert('No metrics data available. Run a training session first!');
+        console.warn('Export metrics: No data available');
+        return;
+      }
+      
+      try {
+        const json = JSON.stringify(metricsData, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = documentHandle.createElement('a');
+        a.href = url;
+        
+        // Create filename with generation and timestamp
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const generation = learner.generation;
+        a.download = `metrics-gen${generation}-${timestamp}.json`;
+        
+        a.click();
+        URL.revokeObjectURL(url);
+        
+        console.log(`📊 Metrics exported: ${metricsData.snapshots.length} snapshots from generation ${generation}`);
+        console.log(`   File: metrics-gen${generation}-${timestamp}.json`);
+      } catch (err) {
+        console.error('Failed to export metrics:', err);
+        alert('Failed to export metrics. Check console for details.');
+      }
+    });
+
     console.log('Training UI initialized. Press [L] to toggle.');
+  }
+  
+  function getMetricsExport() {
+    if (!lastMetricsHistory || lastMetricsHistory.length === 0) {
+      return null;
+    }
+    return {
+      metadata: {
+        exportedAt: new Date().toISOString(),
+        generation: learner?.generation || 0,
+        snapshotCount: lastMetricsHistory.length,
+        config: {
+          agentCount: world?.bundles?.length || 0,
+          episodeLength: config?.learning?.episodeLength || 0,
+          rewardChi: config?.rewardChi || 0,
+          populationSize: config?.learning?.populationSize || 0
+        }
+      },
+      snapshots: lastMetricsHistory
+    };
   }
 
   function stopTraining() {
@@ -430,6 +529,7 @@ export function createTrainingModule({
     isTrainingStopped: () => stopTrainingFlag,
     setStopTrainingFlag: (value) => {
       stopTrainingFlag = Boolean(value);
-    }
+    },
+    getLastMetrics: () => lastMetricsHistory
   };
 }
