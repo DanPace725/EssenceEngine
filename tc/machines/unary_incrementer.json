@@ -14,7 +14,7 @@
   },
   "metadata": {
     "machineId": "unaryIncrementer",
-    "author": "SlimeTest"
+    "author": "Essence Engine"
   },
   "snapshotSchema": "schemas/tc_tape_snapshot.schema.json"
 }

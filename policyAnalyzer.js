@@ -1,4 +1,4 @@
-// Policy Analyzer - Interprets and compares Slime-Bundle policies
+// Policy Analyzer - Interprets and compares Essence Engine policies
 // Usage: node policyAnalyzer.js slime-policy-gen6.json slime-policy-gen20.json
 
 const fs = require('fs');
@@ -293,7 +293,7 @@ function main() {
   const args = process.argv.slice(2);
   
   if (args.length === 0) {
-    console.log(`${COLORS.bright}Slime-Bundle Policy Analyzer${COLORS.reset}\n`);
+    console.log(`${COLORS.bright}Essence Engine Policy Analyzer${COLORS.reset}\n`);
     console.log('Usage:');
     console.log('  node policyAnalyzer.js <policy.json>              # Analyze single policy');
     console.log('  node policyAnalyzer.js <policy1.json> <policy2.json>  # Compare two policies');

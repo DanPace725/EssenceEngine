@@ -1,4 +1,4 @@
-// Slime-Bundle Configuration
+// Essence Engine Configuration
 // Organized config for physics, trails, AI, and learning
 
 // Note: Node.js filesystem imports are commented out for browser compatibility
@@ -1251,7 +1251,7 @@ function buildConfigPanel(){
   });
   wrap.innerHTML = `
   <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
-    <strong style="font-size:13px;">Slime Config</strong>
+    <strong style="font-size:13px;">Essence Engine Config</strong>
     <span id="cfg-dirty" title="Modified from loaded profile" style="color:#ffd166; display:none; margin-left:4px;">●</span>
     <button id="cfg-revert"  title="Reset sliders to last loaded profile">Revert</button>
     <button id="cfg-default" title="Reset sliders to boot-time defaults">Defaults</button>
@@ -1445,7 +1445,7 @@ function buildConfigPanel(){
     const snap = ConfigIO.snapshot();
     const blob = new Blob([JSON.stringify(snap, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
-    const a = Object.assign(document.createElement("a"), { href:url, download:"slime-config.json" });
+    const a = Object.assign(document.createElement("a"), { href:url, download:"essence-config.json" });
     document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
   };
   wrap.querySelector("#cfg-imp").onclick = async () => {

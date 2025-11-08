@@ -2,7 +2,7 @@
 
 ## 🧫 Overview
 
-I've successfully implemented an **automatic mitosis/reproduction system** for your slime simulation! Agents can now reproduce when they have sufficient energy, creating dynamic population growth and evolution.
+I've successfully implemented an **automatic mitosis/reproduction system** for your Essence Engine simulation! Agents can now reproduce when they have sufficient energy, creating dynamic population growth and evolution.
 
 ---
 
@@ -442,7 +442,7 @@ You now have a **fully functional reproduction system** with:
 
 **Everything is integrated and ready to go!**
 
-Press **[M]** to enable mitosis and watch your slimes evolve! 🧫✨
+Press **[M]** to enable mitosis and watch your essence agents evolve! 🧫✨
 
 ---
 

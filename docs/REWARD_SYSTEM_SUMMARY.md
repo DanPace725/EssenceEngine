@@ -4,7 +4,7 @@
 
 Your Gen 10-30 analysis revealed:
 - Resource-seeking scores are **weak** (0.033-0.041, need >0.3)
-- Slimes learning **survival, not goal-seeking**
+- Essence agents learning **survival, not goal-seeking**
 - Fixed reward of **6 χ** isn't strong enough to compete with noise
 
 ## The Solution

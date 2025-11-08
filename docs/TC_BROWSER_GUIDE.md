@@ -1,6 +1,6 @@
 # TC (Turing Complete) Features in Browser
 
-The SlimeTest simulation includes **Turing Complete** computational features that can run alongside your simulation! This guide explains what works in the browser and how to use it.
+The Essence Engine simulation includes **Turing Complete** computational features that can run alongside your simulation! This guide explains what works in the browser and how to use it.
 
 ## What is TC?
 
@@ -213,7 +213,7 @@ TcStorage.getStats();     // Get storage statistics
 
 ## Example: Casual Universality Flex
 
-This profile demonstrates Turing-complete computation running alongside slime agents:
+This profile demonstrates Turing-complete computation running alongside essence agents:
 
 1. Enable in browser console: `enableTC('rule110', { seed: 42 })`
 2. Reload page

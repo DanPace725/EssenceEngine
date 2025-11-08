@@ -1,4 +1,4 @@
-// Training UI for Slime-Bundle Learning System
+// Training UI for Essence Engine Learning System
 // Provides controls and visualization for training
 
 export class TrainingUI {

@@ -1,6 +1,6 @@
 # Documentation Index
 
-This index highlights the modular architecture that now powers Slime-Bundle, points to living guides, and records legacy notes for write-ups that still describe the pre-refactor HUD or reward behavior.
+This index highlights the modular architecture that now powers Essence Engine, points to living guides, and records legacy notes for write-ups that still describe the pre-refactor HUD or reward behavior.
 
 ## Architecture Snapshot
 

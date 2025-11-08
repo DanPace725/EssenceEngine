@@ -1,4 +1,4 @@
-// Cross-Entropy Method (CEM) Learner for Slime-Bundle
+// Cross-Entropy Method (CEM) Learner for Essence Engine
 // Simple evolutionary algorithm for training policies
 
 import { CONFIG } from './config.js';

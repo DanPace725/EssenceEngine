@@ -2,7 +2,7 @@
 
 ## Quick Summary
 
-Your slime simulation now trains **BOTH agents simultaneously** using a shared policy!
+Your Essence Engine simulation now trains **BOTH agents simultaneously** using a shared policy!
 
 ---
 

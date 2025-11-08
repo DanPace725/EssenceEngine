@@ -2,7 +2,7 @@
 
 ## What Just Changed
 
-Your slime simulation now has **shared-policy multi-agent learning**!
+Your Essence Engine simulation now has **shared-policy multi-agent learning**!
 
 ### Before (Single Agent)
 - Only Agent 1 trained

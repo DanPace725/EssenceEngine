@@ -1,6 +1,6 @@
 # 🛠️ Policy Analysis Tools - Complete Package
 
-You now have a comprehensive analysis suite for understanding your slime agent learning!
+You now have a comprehensive analysis suite for understanding your essence agent learning!
 
 ---
 

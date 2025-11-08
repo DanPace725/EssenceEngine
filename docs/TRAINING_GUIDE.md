@@ -2,7 +2,7 @@
 
 ## 🎉 Training is Now Fully Integrated!
 
-Your Slime-Bundle simulation now has a complete reinforcement learning system built in.
+Your Essence Engine simulation now has a complete reinforcement learning system built in.
 
 ---
 

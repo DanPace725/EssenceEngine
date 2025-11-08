@@ -1,4 +1,4 @@
-// Controller Interface for Slime-Bundle AI
+// Controller Interface for Essence Engine AI
 // Enables pluggable behavior: heuristic OR learned policy
 
 import { CONFIG } from './config.js';

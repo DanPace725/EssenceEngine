@@ -333,5 +333,5 @@ Everything else stays compatible!
 
 ---
 
-**Let's see if this finally teaches the slimes to actively seek resources! 🎯🔬**
+**Let's see if this finally teaches the essence agents to actively seek resources! 🎯🔬**
 

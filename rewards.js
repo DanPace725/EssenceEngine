@@ -1,4 +1,4 @@
-// Reward Tracking System for Slime-Bundle Learning
+// Reward Tracking System for Essence Engine Learning
 // Tracks agent performance and calculates rewards
 
 import { CONFIG } from './config.js';

@@ -427,7 +427,7 @@ Agent turns right at 68% strength!
 ### "Script not found"
 ```bash
 # Make sure you're in the project directory
-cd SlimeTest
+cd EssenceEngine
 node policyAnalyzer.js slime-policy-gen20.json
 ```
 
@@ -459,5 +459,5 @@ The Policy Analyzer helps you:
 
 **Key insight:** If `Resource-Seeking Score < 0.1`, your policy doesn't care about resources yet. Train more or adjust rewards!
 
-🎯 Now you can see exactly what your slime agents are learning!
+🎯 Now you can see exactly what your essence agents are learning!
 

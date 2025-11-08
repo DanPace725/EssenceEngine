@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://slimetest.local/schemas/tc_tape_snapshot.schema.json",
+  "$id": "https://essenceengine.local/schemas/tc_tape_snapshot.schema.json",
   "title": "TC Turing Tape Snapshot",
   "description": "Snapshot of a single-tape deterministic Turing machine state for manifest recording.",
   "type": "object",

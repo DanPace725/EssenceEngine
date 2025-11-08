@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://slimetest.local/schemas/tc_rule110_snapshot.schema.json",
+  "$id": "https://essenceengine.local/schemas/tc_rule110_snapshot.schema.json",
   "title": "TC Rule 110 Snapshot",
   "description": "Snapshot of a Rule 110 cellular automaton state captured for TC manifest generation.",
   "type": "object",

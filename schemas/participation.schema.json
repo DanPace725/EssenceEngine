@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://slimetest.local/schemas/participation.schema.json",
+  "$id": "https://essenceengine.local/schemas/participation.schema.json",
   "title": "Participation Configuration",
   "description": "Configuration surface for participation gating and falloff behaviour across cooperative modes.",
   "type": "object",

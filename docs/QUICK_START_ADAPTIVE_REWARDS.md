@@ -238,5 +238,5 @@ After 20-30 generations, you should see:
 3. **Collect some resources**
 4. **Then press [L] to train!**
 
-Good luck! The system is ready to make your slimes smarter! 🧠✨
+Good luck! The system is ready to make your essence agents smarter! 🧠✨
 

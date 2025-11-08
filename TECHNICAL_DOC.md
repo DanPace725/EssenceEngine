@@ -1,6 +1,6 @@
-# Slime-Bundle Technical Documentation
+# Essence Engine Technical Documentation
 
-This document provides a technical breakdown of the core mechanics of the Slime-Bundle simulation.
+This document provides a technical breakdown of the core mechanics of the Essence Engine simulation.
 
 ## Core Simulation Loop
 

@@ -1,6 +1,6 @@
-# Slime-Bundle
+# Essence Engine
 
-Slime-Bundle is a browser-based sandbox for exploring emergent behavior in swarms of resource-seeking agents ("bundles"). The refactored codebase separates rendering, simulation, and tooling into modular packages so you can iterate on ecology experiments, learning pipelines, or UI instrumentation without wading through a single monolithic script.
+Essence Engine is a browser-based sandbox for exploring emergent behavior in swarms of resource-seeking agents ("bundles"). The refactored codebase separates rendering, simulation, and tooling into modular packages so you can iterate on ecology experiments, learning pipelines, or UI instrumentation without wading through a single monolithic script.
 
 ## Features
 

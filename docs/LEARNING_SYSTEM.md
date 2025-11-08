@@ -1,8 +1,8 @@
-# Slime-Bundle Learning System
+# Essence Engine Learning System
 
 ## 🎯 What We've Built
 
-We've created the foundational infrastructure for a pluggable learning system that allows slime agents to learn optimal behavior through reinforcement learning.
+We've created the foundational infrastructure for a pluggable learning system that allows essence agents to learn optimal behavior through reinforcement learning.
 
 ---
 

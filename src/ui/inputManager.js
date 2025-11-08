@@ -234,7 +234,7 @@ export function initializeInputManager({
             if (!blob) return;
             const url = URL.createObjectURL(blob);
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-            const filename = `slime-screenshot-${timestamp}.png`;
+            const filename = `essence-screenshot-${timestamp}.png`;
             const link = document.createElement('a');
             link.href = url;
             link.download = filename;
