@@ -83,8 +83,14 @@ export function createBundleClass(context) {
       this.container = container;
       this.maxPoints = maxPoints;
       this.points = [];
+      this.glowGraphics = new PIXI.Graphics();
+      this.glowGraphics.zIndex = -6;
+      if (PIXI.BLEND_MODES?.ADD != null) {
+        this.glowGraphics.blendMode = PIXI.BLEND_MODES.ADD;
+      }
       this.graphics = new PIXI.Graphics();
       this.graphics.zIndex = -5;
+      this.container.addChild(this.glowGraphics);
       this.container.addChild(this.graphics);
       this.tailFadeTicks = 40;
       this.baseWidth = 8;
@@ -98,6 +104,9 @@ export function createBundleClass(context) {
       if (!this.graphics) return;
       this.visible = visible;
       this.graphics.visible = visible;
+      if (this.glowGraphics) {
+        this.glowGraphics.visible = visible;
+      }
     }
 
     record(point, color, speed, alive) {
@@ -129,13 +138,16 @@ export function createBundleClass(context) {
     draw() {
       if (!this.graphics) return;
       this.graphics.clear();
+      if (this.glowGraphics) {
+        this.glowGraphics.clear();
+      }
       if (!this.visible || this.points.length < 2) {
         return;
       }
 
       const baseColor = this.lastColor;
-      const tailColor = lerpColor(baseColor, { r: 0, g: 0, b: 0 }, 0.6);
-      const headColor = lerpColor(baseColor, { r: 255, g: 255, b: 255 }, 0.25);
+      const shadowColor = lerpColor(baseColor, { r: 0, g: 0, b: 0 }, 0.5);
+      const glowColor = lerpColor(baseColor, { r: 255, g: 255, b: 255 }, 0.55);
       const totalSegments = this.points.length - 1;
       const speedBoost = clamp((this.currentSpeed || 0) / CONFIG.moveSpeedPxPerSec, 0, 1);
 
@@ -143,22 +155,50 @@ export function createBundleClass(context) {
         const start = this.points[i];
         const end = this.points[i + 1];
         const t = i / totalSegments;
-        const color = lerpColor(tailColor, headColor, t);
-        const alpha = (1 - t) * 0.55 + speedBoost * 0.25;
-        const width = this.baseWidth * (1 - t * 0.7) * (start.alive ? 1 : 0.6);
+        const aliveFactor = start.alive ? 1 : 0.6;
+        const width = this.baseWidth * (1 - t * 0.65) * aliveFactor;
+        const alpha = clamp((1 - t) * 0.6 + speedBoost * 0.25, 0.08, 0.85);
+        const color = lerpColor(shadowColor, baseColor, Math.pow(1 - t, 0.8));
+        const glowAlpha = clamp((1 - t) * 0.25 + speedBoost * 0.35, 0.05, 0.6);
+        const glowWidth = Math.max(width * 1.8, this.baseWidth * 0.9);
+
+        if (this.glowGraphics) {
+          this.glowGraphics.lineStyle({
+            width: Math.max(2.5, glowWidth),
+            color: rgbToHexNumber(lerpColor(color, glowColor, 0.65)),
+            alpha: glowAlpha,
+            cap: this.roundCap,
+            join: this.roundJoin
+          });
+        }
 
         this.graphics.lineStyle({
           width: Math.max(1.5, width),
           color: rgbToHexNumber(color),
-          alpha: clamp(alpha, 0.08, 0.8),
+          alpha,
           cap: this.roundCap,
           join: this.roundJoin
         });
 
-        const controlX = start.x + (end.x - start.x) * 0.5;
-        const controlY = start.y + (end.y - start.y) * 0.5;
+        const controlX = start.x + (end.x - start.x) * 0.45;
+        const controlY = start.y + (end.y - start.y) * 0.45;
+
+        if (this.glowGraphics) {
+          this.glowGraphics.moveTo(start.x, start.y);
+          this.glowGraphics.quadraticCurveTo(controlX, controlY, end.x, end.y);
+        }
+
         this.graphics.moveTo(start.x, start.y);
         this.graphics.quadraticCurveTo(controlX, controlY, end.x, end.y);
+      }
+
+      const head = this.points[this.points.length - 1];
+      if (head && this.glowGraphics) {
+        const headRadius = Math.max(3, this.baseWidth * (0.6 + speedBoost));
+        const headAlpha = clamp(0.22 + speedBoost * 0.4, 0.22, 0.8);
+        this.glowGraphics.beginFill(rgbToHexNumber(glowColor), headAlpha);
+        this.glowGraphics.drawCircle(head.x, head.y, headRadius);
+        this.glowGraphics.endFill();
       }
     }
 
@@ -167,6 +207,11 @@ export function createBundleClass(context) {
         this.container.removeChild(this.graphics);
         this.graphics.destroy();
         this.graphics = null;
+      }
+      if (this.glowGraphics) {
+        this.container.removeChild(this.glowGraphics);
+        this.glowGraphics.destroy();
+        this.glowGraphics = null;
       }
       this.points = [];
     }
@@ -844,14 +889,8 @@ export function createBundleClass(context) {
         if (!baseColor || Number.isNaN(baseColor.r) || Number.isNaN(baseColor.g) || Number.isNaN(baseColor.b)) {
             fillColor = strokeColor = 0xFF00FF; // Bright pink for debugging missing colors
         } else if (this.alive) {
-            const chiPercentage = clamp(this.chi / CONFIG.maxChi, 0, 1);
-            const vitalityColor = {
-                r: Math.round(baseColor.r * chiPercentage + 255 * (1 - chiPercentage)),
-                g: Math.round(baseColor.g * chiPercentage + 40 * (1 - chiPercentage)),
-                b: Math.round(baseColor.b * chiPercentage + 40 * (1 - chiPercentage))
-            };
-            fillColor = rgbToHexNumber(vitalityColor);
-            strokeColor = rgbToHexNumber(baseColor);
+            const solidColor = rgbToHexNumber(baseColor);
+            fillColor = strokeColor = solidColor;
         } else {
             const cssColor = getAgentColor(this.id, this.alive) || '#000000';
             const hex = cssColor.startsWith('#') ? cssColor.slice(1) : cssColor;
