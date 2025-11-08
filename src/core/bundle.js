@@ -42,6 +42,7 @@ export function createBundleClass(context) {
     provokeBondedExploration,
     getAgentColor,
     getAgentColorRGB,
+    agentTrailsContainer,
     getWorld
   } = context;
 
@@ -61,12 +62,160 @@ export function createBundleClass(context) {
   if (typeof provokeBondedExploration !== 'function') throw new Error('provokeBondedExploration dependency is required');
   if (typeof getAgentColor !== 'function') throw new Error('getAgentColor dependency is required');
   if (typeof getAgentColorRGB !== 'function') throw new Error('getAgentColorRGB dependency is required');
+  if (!agentTrailsContainer) throw new Error('agentTrailsContainer dependency is required');
   if (typeof getWorld !== 'function') throw new Error('getWorld dependency is required');
 
   const currentTick = () => getGlobalTick();
   const width = () => getCanvasWidth();
   const height = () => getCanvasHeight();
   const worldRef = () => getWorld();
+
+  const rgbToHexNumber = ({ r, g, b }) => PIXI.utils.rgb2hex([r / 255, g / 255, b / 255]);
+
+  const lerpColor = (a, b, t) => ({
+    r: Math.round(mix(a.r, b.r, t)),
+    g: Math.round(mix(a.g, b.g, t)),
+    b: Math.round(mix(a.b, b.b, t))
+  });
+
+  class SmoothTrailRenderer {
+    constructor({ container, maxPoints = 18 }) {
+      this.container = container;
+      this.maxPoints = maxPoints;
+      this.points = [];
+      this.glowGraphics = new PIXI.Graphics();
+      this.glowGraphics.zIndex = -6;
+      if (PIXI.BLEND_MODES?.ADD != null) {
+        this.glowGraphics.blendMode = PIXI.BLEND_MODES.ADD;
+      }
+      this.graphics = new PIXI.Graphics();
+      this.graphics.zIndex = -5;
+      this.container.addChild(this.glowGraphics);
+      this.container.addChild(this.graphics);
+      this.tailFadeTicks = 40;
+      this.baseWidth = 8;
+      this.lastColor = { r: 255, g: 255, b: 255 };
+      this.visible = true;
+      this.roundCap = PIXI?.LINE_CAP?.ROUND ?? 'round';
+      this.roundJoin = PIXI?.LINE_JOIN?.ROUND ?? 'round';
+    }
+
+    setVisible(visible) {
+      if (!this.graphics) return;
+      this.visible = visible;
+      this.graphics.visible = visible;
+      if (this.glowGraphics) {
+        this.glowGraphics.visible = visible;
+      }
+    }
+
+    record(point, color, speed, alive) {
+      if (!this.graphics) return;
+      this.lastColor = color || this.lastColor;
+      const tick = currentTick();
+      const last = this.points[this.points.length - 1];
+      if (!last || Math.hypot(last.x - point.x, last.y - point.y) > 2) {
+        this.points.push({ ...point, tick, alive });
+      } else {
+        last.x = point.x;
+        last.y = point.y;
+        last.tick = tick;
+        last.alive = alive;
+      }
+
+      while (this.points.length > this.maxPoints) {
+        this.points.shift();
+      }
+
+      const cutoff = tick - this.tailFadeTicks;
+      while (this.points.length && this.points[0].tick < cutoff) {
+        this.points.shift();
+      }
+
+      this.currentSpeed = speed;
+    }
+
+    draw() {
+      if (!this.graphics) return;
+      this.graphics.clear();
+      if (this.glowGraphics) {
+        this.glowGraphics.clear();
+      }
+      if (!this.visible || this.points.length < 2) {
+        return;
+      }
+
+      const baseColor = this.lastColor;
+      const shadowColor = lerpColor(baseColor, { r: 0, g: 0, b: 0 }, 0.5);
+      const glowColor = lerpColor(baseColor, { r: 255, g: 255, b: 255 }, 0.55);
+      const totalSegments = this.points.length - 1;
+      const speedBoost = clamp((this.currentSpeed || 0) / CONFIG.moveSpeedPxPerSec, 0, 1);
+
+      for (let i = 0; i < totalSegments; i++) {
+        const start = this.points[i];
+        const end = this.points[i + 1];
+        const t = i / totalSegments;
+        const aliveFactor = start.alive ? 1 : 0.6;
+        const width = this.baseWidth * (1 - t * 0.65) * aliveFactor;
+        const alpha = clamp((1 - t) * 0.6 + speedBoost * 0.25, 0.08, 0.85);
+        const color = lerpColor(shadowColor, baseColor, Math.pow(1 - t, 0.8));
+        const glowAlpha = clamp((1 - t) * 0.25 + speedBoost * 0.35, 0.05, 0.6);
+        const glowWidth = Math.max(width * 1.8, this.baseWidth * 0.9);
+
+        if (this.glowGraphics) {
+          this.glowGraphics.lineStyle({
+            width: Math.max(2.5, glowWidth),
+            color: rgbToHexNumber(lerpColor(color, glowColor, 0.65)),
+            alpha: glowAlpha,
+            cap: this.roundCap,
+            join: this.roundJoin
+          });
+        }
+
+        this.graphics.lineStyle({
+          width: Math.max(1.5, width),
+          color: rgbToHexNumber(color),
+          alpha,
+          cap: this.roundCap,
+          join: this.roundJoin
+        });
+
+        const controlX = start.x + (end.x - start.x) * 0.45;
+        const controlY = start.y + (end.y - start.y) * 0.45;
+
+        if (this.glowGraphics) {
+          this.glowGraphics.moveTo(start.x, start.y);
+          this.glowGraphics.quadraticCurveTo(controlX, controlY, end.x, end.y);
+        }
+
+        this.graphics.moveTo(start.x, start.y);
+        this.graphics.quadraticCurveTo(controlX, controlY, end.x, end.y);
+      }
+
+      const head = this.points[this.points.length - 1];
+      if (head && this.glowGraphics) {
+        const headRadius = Math.max(3, this.baseWidth * (0.6 + speedBoost));
+        const headAlpha = clamp(0.22 + speedBoost * 0.4, 0.22, 0.8);
+        this.glowGraphics.beginFill(rgbToHexNumber(glowColor), headAlpha);
+        this.glowGraphics.drawCircle(head.x, head.y, headRadius);
+        this.glowGraphics.endFill();
+      }
+    }
+
+    destroy() {
+      if (this.graphics) {
+        this.container.removeChild(this.graphics);
+        this.graphics.destroy();
+        this.graphics = null;
+      }
+      if (this.glowGraphics) {
+        this.container.removeChild(this.glowGraphics);
+        this.glowGraphics.destroy();
+        this.glowGraphics = null;
+      }
+      this.points = [];
+    }
+  }
 
   const decaySystem = createDecaySystem({ getGlobalTick, config: CONFIG });
   let mitosisSystem;
@@ -144,6 +293,9 @@ export function createBundleClass(context) {
 
       this.graphics = new PIXI.Graphics();
       agentsContainer.addChild(this.graphics);
+      this.trailRenderer = new SmoothTrailRenderer({
+        container: agentTrailsContainer
+      });
     }
 
     computeSensoryRange(dt) {
@@ -716,12 +868,13 @@ export function createBundleClass(context) {
     draw() {
         this.graphics.clear();
         this.graphics.visible = this.visible;
+        this.trailRenderer.setVisible(this.visible);
 
         if (!this.visible) {
             return;
         }
 
-        const LERP_RATE = 0.1;
+        const LERP_RATE = 0.18;
         this.visualX += (this.x - this.visualX) * LERP_RATE;
         this.visualY += (this.y - this.visualY) * LERP_RATE;
 
@@ -729,49 +882,40 @@ export function createBundleClass(context) {
         this.graphics.y = this.visualY;
 
         // Get color using dynamic color function
-        let color;
-        if (this.alive) {
-            const baseColor = getAgentColorRGB(this.id);
-            if (isNaN(baseColor.r) || isNaN(baseColor.g) || isNaN(baseColor.b)) {
-                color = 0xFF00FF; // Bright pink for debugging
-            } else {
-                const chiPercentage = Math.max(0, Math.min(1, this.chi / CONFIG.maxChi));
+        const baseColor = getAgentColorRGB(this.id);
+        let fillColor = 0xFFFFFF;
+        let strokeColor = 0xFFFFFF;
 
-                // Interpolate between the agent's unique color and red based on chi percentage
-                const r = Math.round(baseColor.r * chiPercentage + 255 * (1 - chiPercentage));
-                const g = Math.round(baseColor.g * chiPercentage + 0 * (1 - chiPercentage));
-                const b = Math.round(baseColor.b * chiPercentage + 0 * (1 - chiPercentage));
-
-                color = (r << 16) | (g << 8) | b;
-            }
+        if (!baseColor || Number.isNaN(baseColor.r) || Number.isNaN(baseColor.g) || Number.isNaN(baseColor.b)) {
+            fillColor = strokeColor = 0xFF00FF; // Bright pink for debugging missing colors
+        } else if (this.alive) {
+            const solidColor = rgbToHexNumber(baseColor);
+            fillColor = strokeColor = solidColor;
         } else {
-            color = parseInt(getAgentColor(this.id, this.alive).substring(1), 16);
+            const cssColor = getAgentColor(this.id, this.alive) || '#000000';
+            const hex = cssColor.startsWith('#') ? cssColor.slice(1) : cssColor;
+            const parsed = Number.parseInt(hex, 16);
+            fillColor = strokeColor = Number.isFinite(parsed) ? parsed : 0x000000;
         }
 
         // sensory ring when extended
         if (this.extendedSensing && this.alive) {
-            this.graphics.lineStyle(2, color, 0.3);
+            this.graphics.lineStyle({ width: 2, color: strokeColor, alpha: 0.3 });
             this.graphics.drawCircle(0, 0, this.currentSensoryRange);
         }
 
         // Controller indicator - glowing circular border when using policy
         if (this.useController && this.controller && this.alive) {
             const alpha = 0.6 + Math.sin(currentTick() * 0.2) * 0.3;
-            this.graphics.lineStyle(3, 0xffff00, alpha); // yellow for controller
+            this.graphics.lineStyle({ width: 3, color: 0xffff00, alpha }); // yellow for controller
             this.graphics.drawCircle(0, 0, this.size / 2 + 3);
         }
 
         // frustration pulse when high
         if (this.frustration >= 0.9 && this.alive) {
             const alpha = 0.5 + Math.sin(currentTick() * 0.3) * 0.3;
-            this.graphics.lineStyle(3, 0xff0000, alpha);
+            this.graphics.lineStyle({ width: 3, color: 0xff0000, alpha });
             this.graphics.drawCircle(0, 0, this.size);
-        }
-
-        // hunger pulse when starving
-        if (this.hunger >= CONFIG.hungerThresholdHigh && this.alive) {
-            // PixiJS doesn't have a direct equivalent of setLineDash, so we'll skip this for now.
-            // A more advanced implementation could use a custom shader or a tiled sprite.
         }
 
         // body (with decay effects if dead) - draw as circle
@@ -779,23 +923,24 @@ export function createBundleClass(context) {
         const effectiveSize = this.size * decayScale;
         const radius = effectiveSize / 2;
 
-        let bodyColor = color;
         let alpha = 1.0;
+        let bodyColor = fillColor;
 
         // Apply decay visual effects
         if (!this.alive && CONFIG.decay.enabled && CONFIG.decay.visualFade) {
             const fade = 1 - this.decayProgress;
             alpha = fade * 0.7; // Max 70% opacity when fresh
-            // Change color to brown/gray as it decays
             bodyColor = 0x3C3228; // Dark brown decay color
         }
 
         this.graphics.beginFill(bodyColor, alpha);
+        this.graphics.lineStyle({ width: 2, color: strokeColor, alpha: 0.9 });
         this.graphics.drawCircle(0, 0, radius);
         this.graphics.endFill();
 
-        // Controller label above agent - this will be harder with PixiJS, as it requires a Text object.
-        // I will skip this for now to keep the initial migration simple.
+        const speed = Math.hypot(this.vx, this.vy);
+        this.trailRenderer.record({ x: this.visualX, y: this.visualY }, baseColor, speed, this.alive);
+        this.trailRenderer.draw();
     }
 
     /**
@@ -922,6 +1067,10 @@ export function createBundleClass(context) {
     }
 
     destroy() {
+        if (this.trailRenderer) {
+          this.trailRenderer.destroy();
+          this.trailRenderer = null;
+        }
         this.graphics.destroy();
     }
   }
