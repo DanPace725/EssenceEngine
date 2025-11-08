@@ -18,6 +18,7 @@ These guides are written from the operator/user perspective and focus on:
 - [Batch Analyzer Guide](BATCH_ANALYZER_GUIDE.md) - Comparing multiple policies
 
 ### Features & Systems
+- [Participation Guide](PARTICIPATION_GUIDE.md) - Interactive agent guidance with mouse/pointer input
 - [Scent Gradient Guide](SCENT_GRADIENT_GUIDE.md) - Using scent gradients for navigation
 - [Plant Ecology Guide](PLANT_ECOLOGY_GUIDE.md) - Understanding the plant ecology system
 - [Resource Ecology Guide](RESOURCE_ECOLOGY_GUIDE.md) - Resource management mechanics

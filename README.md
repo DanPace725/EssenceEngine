@@ -1,26 +1,29 @@
 # Essence Engine
 
-Essence Engine is a browser-based sandbox for exploring emergent behavior in swarms of resource-seeking agents ("bundles"). The refactored codebase separates rendering, simulation, and tooling into modular packages so you can iterate on ecology experiments, learning pipelines, or UI instrumentation without wading through a single monolithic script.
+A browser-based sandbox for exploring emergent behavior in swarms of intelligent agents. Watch as simple agents learn to navigate, forage for resources, and evolve complex behaviors through reinforcement learning.
 
-## Features
+## Overview
 
-* **Modular Simulation Core:** The runtime is organized into focused modules for the world state, systems, UI wiring, and shared utilities under `src/`, making it easier to extend individual mechanics or replace subsystems without side effects.【F:src/index.js†L1-L23】【F:src/core/world.js†L1-L120】
-* **Dynamic Ecology:** Plant fertility, carrying capacity, and residual trail systems work together to produce clustered resources that react to agent pressure.【F:src/core/world.js†L41-L120】
-* **Multi-Agent Training:** A dedicated training module orchestrates synchronized episodes for every bundle, captures telemetry, and coordinates the Cross-Entropy Method (CEM) learner alongside the training UI controls.【F:src/core/training.js†L1-L140】【F:src/core/training.js†L175-L248】
-* **Interactive Simulation:** Keyboard and UI controls let you toggle sensing, gradients, mitosis, telemetry overlays, and training workflows while the render loop adapts to play vs. train modes.【F:src/core/simulationLoop.js†L1-L101】【F:trainingUI.js†L1-L120】
-* **Configurable Systems:** Parameters for ecology, sensing, rewards, HUD overlays, and learning live in `config.js` so experiments can be tuned without touching code.【F:config.js†L1-L260】
+Essence Engine simulates resource-seeking agents (called "bundles") in a dynamic 2D environment. Agents navigate through a world with regenerating plant-based resources, leave trails, sense their surroundings, and can even reproduce. The simulation includes a built-in training system that uses the Cross-Entropy Method to evolve agent behaviors over multiple generations.
 
-## Project Structure
+## Key Features
 
-```
-src/
-  core/         # world assembly, simulation loop orchestration, training coordinator
-  systems/      # discrete systems for movement, sensing, metabolism, mitosis, resources
-  ui/           # browser input and canvas managers
-  utils/        # math helpers and shared utilities
-```
+- **Interactive Simulation** - Run the simulation in real-time with keyboard controls to adjust parameters on the fly
+- **User Participation** - Click and drag to guide agents with interactive force fields in three modes (resource, distress, bond)
+- **Agent Learning** - Built-in reinforcement learning system that trains agents to optimize resource collection
+- **Dynamic Ecology** - Plant resources regenerate based on fertility and carrying capacity, creating evolving landscapes
+- **Agent Reproduction** - Agents can split (mitosis) when they gather enough energy, creating population dynamics
+- **Visualization Tools** - Toggle various overlays to see sensing ranges, scent gradients, fertility maps, and agent trails
+- **Modular Architecture** - Clean separation between simulation core, systems, and UI for easy experimentation
 
-Legacy entry points (`app.js`, `controllers.js`, etc.) remain for backward compatibility, but new features should target the modular `src/` packages.
+## Getting Started
+
+1. Clone this repository
+2. Open `index.html` in a modern web browser
+3. The simulation will start automatically
+4. Use keyboard controls (see below) to interact with the simulation
+
+No build process or dependencies required - it runs entirely in the browser!
 
 ## Controls
 
@@ -42,25 +45,67 @@ Legacy entry points (`app.js`, `controllers.js`, etc.) remain for backward compa
 | `V` | Toggle the visibility of all agents. |
 | `L` | Show/hide the training UI. |
 
+## Participation Mode
+
+Enable interactive agent guidance by pressing `O` to open the config panel and clicking "Enable" in the Participation section.
+
+**Mouse Controls:**
+- **Left Click + Drag** - Guide agents toward resources
+- **Shift/Middle Click** - Create urgent distress signals
+- **Alt/Right Click** - Gentle cooperative bonding
+
+Click and drag to create influence fields that agents respond to in real-time. Perfect for teaching agents, creating demonstrations, or debugging behavior. See `docs/how-to/PARTICIPATION_GUIDE.md` for detailed usage.
+
 ## Configuration
 
-`config.js` exports a single `CONFIG` object that drives ecology, autonomy, UI overlays, and training policies. Highlights:
+The simulation is highly configurable through `config.js`. Key configuration areas include:
 
-* **`plantEcology`** – Enables the fertility-based resource system and its carrying-capacity logic.【F:config.js†L74-L145】
-* **`adaptiveReward`** – Optional adaptive reward calculations that scale payouts with search difficulty; toggle `enabled` to experiment without committing to the mechanic full-time.【F:config.js†L214-L230】
-* **`mitosis`** – Controls reproduction thresholds, lineage overlays, and population caps.【F:config.js†L308-L365】
-* **`learning`** – Configures CEM population sizes, mutation schedules, and episode horizons for bundled training runs.【F:config.js†L386-L474】
+- **Plant Ecology** - Adjust resource regeneration rates, fertility mechanics, and carrying capacity
+- **Agent Behavior** - Configure sensing ranges, movement speeds, and energy metabolism
+- **Mitosis** - Control reproduction thresholds and population limits
+- **Learning** - Tune the reinforcement learning parameters including population size and mutation rates
+- **Adaptive Rewards** - Enable dynamic reward scaling based on resource scarcity
+- **Participation** - Configure interactive guidance modes, force strength, and decay rates
 
-## Training Workflow
+Edit `config.js` to experiment with different parameters without modifying the core simulation code.
 
-Press `L` to open the training dashboard and manage multi-agent learning sessions. Behind the scenes the training coordinator:
+## Training Agents
 
-1. Resets the world and assigns the candidate policy to each bundle before an episode.【F:src/core/training.js†L25-L77】
-2. Steps every bundle in lock-step while capturing trail/signal telemetry and computing adaptive or fixed rewards per collection.【F:src/core/training.js†L92-L183】
-3. Hands reward aggregates back to the learner so CEM can rank elites and evolve the next generation.【F:src/core/training.js†L184-L248】
+Press `L` to open the training UI and start evolving agent behaviors:
 
-The UI surface lets you start/stop batches, save or load policies, and swap between play/test/train modes without restarting the simulation.【F:trainingUI.js†L45-L120】
+1. **Start Training** - Runs episodes with the current policy and collects performance data
+2. **Evolution** - The Cross-Entropy Method (CEM) selects top-performing policies and generates new candidates
+3. **Save/Load** - Export trained policies as JSON files for later use or sharing
+
+The training system runs multiple agents simultaneously, each testing the same policy to get reliable performance metrics. Over generations, agents learn increasingly sophisticated foraging strategies.
+
+## Project Structure
+
+```
+src/
+  core/         # Core simulation systems (world state, training, simulation loop)
+  systems/      # Individual behavior systems (movement, sensing, metabolism, etc.)
+  ui/           # Browser interface and canvas rendering
+  utils/        # Shared utilities and math helpers
+
+docs/           # Comprehensive guides and architecture documentation
+tc/             # Turing machine implementations (experimental)
+test/           # Unit tests for core systems
+```
 
 ## Documentation
 
-Head to `docs/INDEX.md` for a curated map of maintained guides, experimental write-ups, and notes on legacy material that still references the pre-modular layout or HUD overlays.
+Visit `docs/INDEX.md` for detailed guides including:
+
+- Architecture documentation
+- System-specific guides (resources, sensing, training, etc.)
+- How-to guides for common tasks
+- Analysis of training runs and experiments
+
+## Contributing
+
+See `CONTRIBUTING.md` for guidelines on contributing to the project.
+
+## License
+
+This project is open source. Feel free to explore, modify, and experiment!
