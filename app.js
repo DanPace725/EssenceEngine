@@ -102,10 +102,19 @@ import { MetricsTracker } from './src/core/metricsTracker.js';
       getAvailableSize
     });
 
+    const TARGET_WIDTH = 1280; // Desktop reference width
+    let currentScale = 1.0;
+
+    const updatePixiScale = (width) => {
+        currentScale = Math.min(1.0, width / TARGET_WIDTH);
+        pixiApp.stage.scale.set(currentScale);
+    };
+
     const updateCanvasState = ({ width, height, dpr: nextDpr }) => {
       canvasWidth = width;
       canvasHeight = height;
       dpr = nextDpr;
+      updatePixiScale(width);
     };
 
     updateCanvasState(canvasManager.getState());
@@ -898,6 +907,8 @@ import { MetricsTracker } from './src/core/metricsTracker.js';
     // Now that Trail is defined, call initial resize
     canvasManager.resizeCanvas();
   
+    const getCurrentScale = () => currentScale;
+
     const { held, state: inputState } = initializeInputManager({
       canvas,
       getWorld: () => World,
@@ -905,6 +916,7 @@ import { MetricsTracker } from './src/core/metricsTracker.js';
       getSignalField: () => SignalField,
       getTrainingUI: () => window.trainingUI,
       getParticipationManager: () => ParticipationManager,
+      getCurrentScale,
       CONFIG
     });
 
