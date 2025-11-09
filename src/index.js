@@ -2,116 +2,62 @@
 // Loads the existing app.js side effects and re-exports its window globals.
 import '../app.js';
 
-function setupMobileOptimizations() {
-  if (typeof window === 'undefined') return;
-
-  const body = document.body;
-  const root = document.documentElement;
-  const toggleButton = document.getElementById('mobile-overlay-toggle');
-  const hud = document.getElementById('hud-container');
-
-  if (!body || !root || !toggleButton) {
-    return;
-  }
-
-  let overlaysOpen = false;
-  let lastIsMobile = null;
-
-  if (typeof window.matchMedia !== 'function') {
-    return;
-  }
-
-  const widthQuery = window.matchMedia('(max-width: 768px)');
-  const pointerQuery = window.matchMedia('(pointer: coarse)');
-
-  const ensureHudOffset = () => {
-    if (!body.classList.contains('is-mobile') || !overlaysOpen || !hud) {
-      root.style.setProperty('--hud-offset', '0px');
-      return;
-    }
-
-    const hudRect = hud.getBoundingClientRect();
-    const offset = Math.max(0, Math.ceil(hudRect.height + 12));
-    root.style.setProperty('--hud-offset', `${offset}px`);
-  };
-
-  const applyOverlayState = () => {
-    const isMobile = body.classList.contains('is-mobile');
-
-    if (!isMobile) {
-      body.classList.remove('mobile-overlays-open');
-      toggleButton.setAttribute('aria-pressed', 'false');
-      ensureHudOffset();
-      return;
-    }
-
-    body.classList.toggle('mobile-overlays-open', overlaysOpen);
-    toggleButton.setAttribute('aria-pressed', overlaysOpen ? 'true' : 'false');
-    window.requestAnimationFrame(ensureHudOffset);
-  };
-
-  const prefersMobile = () => widthQuery.matches || pointerQuery.matches;
-
-  const handleMobileChange = () => {
-    const nextIsMobile = prefersMobile();
-    body.classList.toggle('is-mobile', nextIsMobile);
-
-    if (nextIsMobile !== lastIsMobile) {
-      overlaysOpen = nextIsMobile ? false : true;
-      lastIsMobile = nextIsMobile;
-    }
-
-    applyOverlayState();
-  };
-
-  const attachMediaListener = (query) => {
-    if (!query) return;
-    if (typeof query.addEventListener === 'function') {
-      query.addEventListener('change', handleMobileChange);
-    } else if (typeof query.addListener === 'function') {
-      query.addListener(handleMobileChange);
-    }
-  };
-
-  attachMediaListener(widthQuery);
-  attachMediaListener(pointerQuery);
-
-  toggleButton.addEventListener('click', () => {
-    overlaysOpen = !overlaysOpen;
-    applyOverlayState();
-  });
-
-  window.addEventListener('resize', () => {
-    handleMobileChange();
-    if (body.classList.contains('is-mobile') && overlaysOpen) {
-      window.requestAnimationFrame(ensureHudOffset);
-    }
-  }, { passive: true });
-
-  if (window.visualViewport) {
-    const handleViewportChange = () => {
+// Ensure refresh-like sizing at startup: run immediately and once next frame after load/pageshow
+// CRITICAL: High-DPI displays (Surface laptops) need extra time for dimensions to stabilize
+if (typeof window !== 'undefined') {
+  const scheduleInitialResize = () => {
+    if (typeof window.resizeCanvas === 'function') {
+      console.log('[index.js] scheduleInitialResize called, devicePixelRatio:', window.devicePixelRatio);
+      
+      // First pass now
+      window.resizeCanvas();
+      
+      // Second pass: wait for layout to fully settle (especially important on high-DPI)
+      // Use double-RAF to ensure we're past the initial layout phase
       window.requestAnimationFrame(() => {
-        handleMobileChange();
-        if (typeof window.resizeCanvas === 'function') {
-          window.resizeCanvas();
-        }
-        if (body.classList.contains('is-mobile') && overlaysOpen) {
-          ensureHudOffset();
-        }
+        window.requestAnimationFrame(() => {
+          if (typeof window.resizeCanvas === 'function') {
+            console.log('[index.js] Second resize pass (after double RAF)');
+            window.resizeCanvas();
+          }
+          
+          // Third pass: aggressive timing for high-DPI displays
+          // Surface laptops with scaling need extra time for display to stabilize
+          if (window.devicePixelRatio > 1) {
+            setTimeout(() => {
+              if (typeof window.resizeCanvas === 'function') {
+                console.log('[index.js] Third resize pass (high-DPI, after 50ms)');
+                window.resizeCanvas();
+              }
+            }, 50);
+            
+            // Fourth pass: even more aggressive for stubborn Surface laptops
+            setTimeout(() => {
+              if (typeof window.resizeCanvas === 'function') {
+                console.log('[index.js] Fourth resize pass (high-DPI, after 200ms)');
+                window.resizeCanvas();
+              }
+            }, 200);
+          }
+        });
       });
-    };
+    }
+  };
 
-    window.visualViewport.addEventListener('resize', handleViewportChange);
-    window.visualViewport.addEventListener('scroll', handleViewportChange);
+  if (document.readyState === 'complete') {
+    scheduleInitialResize();
+  } else {
+    window.addEventListener('load', scheduleInitialResize, { once: true });
   }
 
-  handleMobileChange();
-}
-
-setupMobileOptimizations();
-
-if (typeof window !== 'undefined' && typeof window.resizeCanvas === 'function') {
-  window.resizeCanvas();
+  // Handle bfcache restore or late visual adjustments
+  window.addEventListener('pageshow', () => {
+    window.requestAnimationFrame(() => {
+      if (typeof window.resizeCanvas === 'function') {
+        window.resizeCanvas();
+      }
+    });
+  }, { once: true });
 }
 
 export const World = window.World;

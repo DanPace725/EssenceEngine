@@ -61,12 +61,11 @@ export function getRule110SpawnLocation(stepper, canvasWidth, canvasHeight) {
   
   if (!stepper || !config.spatialMapping) {
     // Fallback to random
+    // Note: canvasWidth/Height are already adjusted for UI panels by canvasManager
     const margin = 60;
-    const configPanelWidth = 360;
-    const rightMargin = margin + configPanelWidth;
     return {
-      x: margin + TcRandom.random() * (canvasWidth - margin - rightMargin),
-      y: margin + TcRandom.random() * (canvasHeight - 2 * margin),
+      x: margin + TcRandom.random() * Math.max(0, canvasWidth - 2 * margin),
+      y: margin + TcRandom.random() * Math.max(0, canvasHeight - 2 * margin),
       tcData: { source: 'random', activity: 0 }
     };
   }

@@ -47,16 +47,37 @@ import { MetricsTracker } from './src/core/metricsTracker.js';
     const ctx = canvas.getContext("2d", { alpha: false, desynchronized: true });
 
     // ---------- PixiJS Integration ----------
+    // IMPORTANT: Get stable dimensions for high-DPI displays (Surface laptops, etc.)
+    // Wait for layout to settle before reading window dimensions
+    console.log(`[app.js] Initializing: window.devicePixelRatio=${window.devicePixelRatio}`);
+    console.log(`[app.js] Initializing: window.innerWidth=${window.innerWidth}, window.innerHeight=${window.innerHeight}`);
+    console.log(`[app.js] Initializing: clientWidth=${document.documentElement.clientWidth}, clientHeight=${document.documentElement.clientHeight}`);
+    
+    let actualWidth = window.innerWidth;
+    let actualHeight = window.innerHeight;
+    let actualDPR = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
+    
+    // On high-DPI displays, force a synchronous reflow to ensure dimensions are accurate
+    if (actualDPR > 1) {
+        // Force layout calculation by reading offsetWidth/Height
+        actualWidth = document.documentElement.clientWidth || window.innerWidth;
+        actualHeight = document.documentElement.clientHeight || window.innerHeight;
+    }
+    
+    console.log(`[app.js] Creating PixiJS with: ${actualWidth}x${actualHeight}, resolution=${actualDPR}`);
+    
     const pixiApp = new PIXI.Application({
-        width: innerWidth,
-        height: innerHeight,
+        width: actualWidth,
+        height: actualHeight,
         backgroundAlpha: 0,
-        resolution: window.devicePixelRatio || 1,
+        resolution: actualDPR,
         autoDensity: true,
         autoStart: false,
         antialias: true,  // Enable anti-aliasing for smooth edges
         powerPreference: 'high-performance'
     });
+    
+    console.log(`[app.js] PixiJS created: renderer.width=${pixiApp.renderer.width}, renderer.height=${pixiApp.renderer.height}, renderer.resolution=${pixiApp.renderer.resolution}`);
     const resourcesContainer = new PIXI.Container();
     resourcesContainer.sortableChildren = true;
     pixiApp.stage.addChild(resourcesContainer);
@@ -72,26 +93,30 @@ import { MetricsTracker } from './src/core/metricsTracker.js';
     window.agentTrailsContainer = agentTrailsContainer; // For debugging
   
     // ---------- DPR-aware sizing ----------
-    let dpr = 1;
-    const initialVp = typeof window !== 'undefined' ? window.visualViewport : null;
-    let canvasWidth = initialVp ? Math.floor(initialVp.width) : innerWidth;
-    let canvasHeight = initialVp ? Math.floor(initialVp.height) : innerHeight;
+    let dpr = actualDPR; // Use the stable DPR we calculated above
+    let canvasWidth = actualWidth;
+    let canvasHeight = actualHeight;
 
     const getAvailableSize = () => {
-      const viewport = typeof window !== 'undefined' ? window.visualViewport : null;
-      const viewportWidth = viewport ? Math.floor(viewport.width) : innerWidth;
-      const viewportHeight = viewport ? Math.floor(viewport.height) : innerHeight;
-
       const configPanel = document.getElementById("config-panel");
       const panelOpen = configPanel && configPanel.style.display !== "none";
-      const maxPanelWidth = panelOpen ? 360 : 0; // Config panel width when space permits
-      const availableWidth = Math.max(0, viewportWidth - 80);
-      const panelWidth = panelOpen ? Math.min(maxPanelWidth, availableWidth) : 0;
+      const panelWidth = panelOpen ? 360 : 0; // Config panel width
+      // Canvas now fills full viewport, HUD/Dashboard are drawn on top
+      
+      // Use stable dimension calculation for high-DPI displays
+      // Prefer clientWidth/Height as they're more reliable on scaled displays
+      const dprCheck = window.devicePixelRatio || 1;
+      const width = dprCheck > 1 
+        ? (document.documentElement.clientWidth || window.innerWidth) 
+        : window.innerWidth;
+      const height = dprCheck > 1 
+        ? (document.documentElement.clientHeight || window.innerHeight) 
+        : window.innerHeight;
 
       return {
-        width: Math.max(0, viewportWidth - panelWidth),
-        height: viewportHeight,
-        panelWidth,
+        width: width - panelWidth,
+        height: height,
+        panelWidth: panelWidth,
         topReserve: 0
       };
     };
@@ -102,19 +127,10 @@ import { MetricsTracker } from './src/core/metricsTracker.js';
       getAvailableSize
     });
 
-    const TARGET_WIDTH = 1280; // Desktop reference width
-    let currentScale = 1.0;
-
-    const updatePixiScale = (width) => {
-        currentScale = Math.min(1.0, width / TARGET_WIDTH);
-        pixiApp.stage.scale.set(currentScale);
-    };
-
     const updateCanvasState = ({ width, height, dpr: nextDpr }) => {
       canvasWidth = width;
       canvasHeight = height;
       dpr = nextDpr;
-      updatePixiScale(width);
     };
 
     updateCanvasState(canvasManager.getState());
@@ -884,12 +900,12 @@ import { MetricsTracker } from './src/core/metricsTracker.js';
     // Call resize after Trail is defined (done later in code)
 
     // ---------- Fertility Grid (Plant Ecology) ----------
+    // Note: FertilityField is created in the onResize callback to ensure correct dimensions
     let FertilityField = null;
-    if (CONFIG.plantEcology.enabled) {
-      FertilityField = new FertilityGrid(canvasWidth, canvasHeight);
-    }
 
-    canvasManager.onResize(({ width, height }) => {
+    canvasManager.onResize(({ width, height, dpr }) => {
+      console.log(`[app.js onResize] Resize callback received: ${width}x${height}, DPR: ${dpr}`);
+      
       if (Trail && Trail.resize) {
         Trail.resize();
       }
@@ -899,15 +915,23 @@ import { MetricsTracker } from './src/core/metricsTracker.js';
       }
 
       if (CONFIG.plantEcology.enabled && typeof FertilityGrid !== 'undefined') {
+        console.log(`[app.js onResize] Creating new FertilityGrid with: ${width}x${height}`);
         FertilityField = new FertilityGrid(width, height);
+        console.log(`[app.js onResize] FertilityGrid created: ${FertilityField.w}x${FertilityField.h} cells = ${FertilityField.w * FertilityField.cell}x${FertilityField.h * FertilityField.cell} world size`);
       }
+      
+      // CRITICAL: Update PixiJS renderer resolution AND dimensions
+      // Surface laptops need the resolution to be recalculated on each resize
+      pixiApp.renderer.resolution = dpr;
       pixiApp.renderer.resize(width, height);
     });
 
-    // Now that Trail is defined, call initial resize
+    // Call initial resize - this will create FertilityField with correct dimensions
+    console.log(`[app.js] Calling initial canvasManager.resizeCanvas()`);
     canvasManager.resizeCanvas();
   
-    const getCurrentScale = () => currentScale;
+    
+  
 
     const { held, state: inputState } = initializeInputManager({
       canvas,
@@ -916,7 +940,6 @@ import { MetricsTracker } from './src/core/metricsTracker.js';
       getSignalField: () => SignalField,
       getTrainingUI: () => window.trainingUI,
       getParticipationManager: () => ParticipationManager,
-      getCurrentScale,
       CONFIG
     });
 
@@ -1051,6 +1074,12 @@ import { MetricsTracker } from './src/core/metricsTracker.js';
       
       // Force a render to clear any remaining artifacts
       pixiApp.render();
+      
+      // Ensure canvas sizing is correct after restart
+      if (typeof window !== 'undefined' && typeof window.resizeCanvas === 'function') {
+        // Defer to next frame so layout/UI updates settle first
+        window.requestAnimationFrame(() => window.resizeCanvas());
+      }
       
       return result;
     };
@@ -1458,6 +1487,7 @@ import { MetricsTracker } from './src/core/metricsTracker.js';
       const colWidths = {
         vis: 28,      // "vis/alive" - icons
         id: 36,       // "ID"
+        pos: 85,      // "X,Y" position
         chi: 62,      // "χ" with value
         cr: 62,       // "cr" with value
         f: 48,        // "F" with %
@@ -1524,6 +1554,8 @@ import { MetricsTracker } from './src/core/metricsTracker.js';
         x += colWidths.vis;
         ctx.fillText("ID", x, startY);
         x += colWidths.id;
+        ctx.fillText("X,Y", x, startY);
+        x += colWidths.pos;
         ctx.fillText("chi", x, startY);
         x += colWidths.chi;
         ctx.fillText("credits", x, startY);
@@ -1565,6 +1597,7 @@ import { MetricsTracker } from './src/core/metricsTracker.js';
         const senseStr = Math.round(bundle.currentSensoryRange || 0).toString().padStart(3, " ");
         const controllerLabel = getControllerBadge(bundle, index); // No truncation
         const idLabel = `A${bundle.id.toString().padStart(2, "0")}`;
+        const posStr = `${Math.round(bundle.x)},${Math.round(bundle.y)}`;
 
         ctx.fillStyle = bundle.alive ? getAgentColor(bundle.id, true) : "#777777";
         
@@ -1580,6 +1613,8 @@ import { MetricsTracker } from './src/core/metricsTracker.js';
         x += colWidths.vis;
         ctx.fillText(idLabel, x, rowY);
         x += colWidths.id;
+        ctx.fillText(posStr, x, rowY);
+        x += colWidths.pos;
         ctx.fillText(`χ${chiStr}`, x, rowY);
         x += colWidths.chi;
         ctx.fillText(`cr${creditStr}`, x, rowY);
@@ -1942,7 +1977,7 @@ import { MetricsTracker } from './src/core/metricsTracker.js';
           console.log(`🌱 Seed sprouted at (${Math.round(seedLocation.x)}, ${Math.round(seedLocation.y)}) | Fertility: ${seedLocation.fertility.toFixed(2)}`);
         }
 
-        const growthLocation = attemptSpontaneousGrowth(FertilityField, dt, aliveCount);
+        const growthLocation = attemptSpontaneousGrowth(FertilityField, dt, aliveCount, canvasWidth, canvasHeight);
         if (growthLocation && World.resources.length < maxResources) {
           const newResource = new Resource(growthLocation.x, growthLocation.y, CONFIG.resourceRadius);
           World.resources.push(newResource);
@@ -2048,7 +2083,9 @@ import { MetricsTracker } from './src/core/metricsTracker.js';
     ];
 
     const drawFrame = () => {
-      ctx.fillStyle = "#000"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // CRITICAL: Use logical dimensions, not physical (canvas has DPR transform applied)
+      ctx.fillStyle = "#000"; 
+      ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
       if (inputState.showFertility && CONFIG.plantEcology.enabled && FertilityField) {
         FertilityField.draw(ctx);
@@ -2113,8 +2150,10 @@ import { MetricsTracker } from './src/core/metricsTracker.js';
       }
 
       // Draw the PixiJS stage
+      // CRITICAL FIX: Draw PixiJS at logical size to account for DPR transform
+      // The context has setTransform(dpr, 0, 0, dpr, 0, 0), so we draw at logical coords
       pixiApp.render();
-      ctx.drawImage(pixiApp.view, 0, 0);
+      ctx.drawImage(pixiApp.view, 0, 0, canvasWidth, canvasHeight);
     };
 
     startSimulation({

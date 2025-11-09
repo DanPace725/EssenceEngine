@@ -259,10 +259,6 @@ export function createBundleClass(context) {
       // frustration (0..1)
       this.frustration = 0;
       this.lastCollectTick = 0;
-      
-      // Resource sensing tracking for signal emission
-      this._wasSensingResource = false; // Track previous frame's sensing state
-      this._consumptionSignalFrames = 0; // Frames remaining to deposit consumption signal
 
       // hunger (0..1) - biological drive that amplifies exploration and frustration
       this.hunger = 0;
@@ -836,45 +832,9 @@ export function createBundleClass(context) {
       const ticksSinceCollect = tick - this.lastCollectTick;
       const { value: localTrailPrev } = Trail.sample(this.x, this.y);
       const lowTrail = localTrailPrev < CONFIG.aiFrustrationLowTrail;
-      
-      // Check if agent can see any resource (check all resources, not just the one passed)
-      const world = worldRef();
-      let canSeeResource = false;
-      if (world && world.resources) {
-        for (const res of world.resources) {
-          if (res && !res.depleted && res.visible) {
-            const dist = Math.hypot(res.x - this.x, res.y - this.y);
-            if (dist <= this.currentSensoryRange) {
-              canSeeResource = true;
-              break;
-            }
-          }
-        }
-      }
-      // Fallback to single resource check if world not available
-      if (!canSeeResource && resource && !resource.depleted && resource.visible) {
-        canSeeResource = Math.hypot(resource.x - this.x, resource.y - this.y) <= this.currentSensoryRange;
-      }
-
-      // Emit sensing signal when resource is first detected
-      if (canSeeResource && !this._wasSensingResource && CONFIG.signal?.enabled) {
-        const sensingStrength = CONFIG.signal.resourceSensingStrength || 0.3;
-        if (sensingStrength > 0 && typeof this.emitSignal === 'function') {
-          this.emitSignal('resource', sensingStrength, { absolute: true, x: this.x, y: this.y });
-        }
-      }
-      this._wasSensingResource = canSeeResource;
-
-      // Continue depositing consumption signal if active
-      if (this._consumptionSignalFrames > 0 && CONFIG.signal?.enabled) {
-        const consumptionStrength = CONFIG.signal.resourceConsumptionStrength || 1.0;
-        if (consumptionStrength > 0 && typeof this.emitSignal === 'function') {
-          this.emitSignal('resource', consumptionStrength, { absolute: true, x: this.x, y: this.y });
-          this._consumptionSignalFrames--;
-        } else {
-          this._consumptionSignalFrames = 0;
-        }
-      }
+      const canSeeResource = resource
+        ? Math.hypot(resource.x - this.x, resource.y - this.y) <= this.currentSensoryRange
+        : false;
 
       let waveSample = null;
       if (ParticipationManager && typeof ParticipationManager.sampleWaveStrengths === 'function') {

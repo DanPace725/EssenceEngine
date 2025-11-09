@@ -4,13 +4,20 @@ export function initializeCanvasManager({ canvas, ctx, getAvailableSize }) {
   }
 
   let dpr = 1;
-  let canvasWidth = (typeof window !== 'undefined' && window.visualViewport) ? Math.floor(window.visualViewport.width) : (typeof window !== 'undefined' ? window.innerWidth : canvas?.width || 0);
-  let canvasHeight = (typeof window !== 'undefined' && window.visualViewport) ? Math.floor(window.visualViewport.height) : (typeof window !== 'undefined' ? window.innerHeight : canvas?.height || 0);
+  // Use more stable dimension sources for high-DPI displays (Surface laptops, etc.)
+  let canvasWidth = typeof window !== 'undefined' 
+    ? (document.documentElement.clientWidth || window.innerWidth)
+    : canvas?.width || 0;
+  let canvasHeight = typeof window !== 'undefined' 
+    ? (document.documentElement.clientHeight || window.innerHeight)
+    : canvas?.height || 0;
   const resizeCallbacks = new Set();
 
   const applyResize = () => {
     if (typeof window !== 'undefined') {
+      // Always read fresh DPR - critical for Surface laptops with display scaling
       dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
+      console.log(`[canvasManager] applyResize: devicePixelRatio=${window.devicePixelRatio}, clamped dpr=${dpr}`);
     }
 
     const size = typeof getAvailableSize === 'function'
@@ -22,6 +29,8 @@ export function initializeCanvasManager({ canvas, ctx, getAvailableSize }) {
 
     const targetWidth = Math.floor(canvasWidth * dpr);
     const targetHeight = Math.floor(canvasHeight * dpr);
+    
+    console.log(`[canvasManager] Resizing canvas: logical=${canvasWidth}x${canvasHeight}, physical=${targetWidth}x${targetHeight}, dpr=${dpr}`);
 
     if (canvas.width !== targetWidth) canvas.width = targetWidth;
     if (canvas.height !== targetHeight) canvas.height = targetHeight;

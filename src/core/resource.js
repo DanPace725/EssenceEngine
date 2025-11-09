@@ -212,27 +212,32 @@ export function createResourceClass(context) {
         this.x = spawnInfo.location.x;
         this.y = spawnInfo.location.y;
         this.tcData = spawnInfo.tcData; // Store TC metadata
+        console.log(`[Resource] TC spawn at (${this.x.toFixed(0)}, ${this.y.toFixed(0)}) | Canvas: ${canvasWidth()}x${canvasHeight()}`);
       }
       // Use fertility-based spawning if plant ecology enabled
       else if (CONFIG.plantEcology.enabled) {
         const field = fertilityField();
         if (field) {
-          const location = getResourceSpawnLocation(field, canvasWidth(), canvasHeight());
+          const cw = canvasWidth();
+          const ch = canvasHeight();
+          const location = getResourceSpawnLocation(field, cw, ch);
           this.x = location.x;
           this.y = location.y;
+          console.log(`[Resource] Plant ecology spawn at (${this.x.toFixed(0)}, ${this.y.toFixed(0)}) | Canvas: ${cw}x${ch} | Fertility grid: ${field.w * field.cell}x${field.h * field.cell}`);
         }
       } else {
         // Fallback: random spawn
+        // Note: canvasWidth() is already adjusted for UI panels by canvasManager
         const margin = 60;
-        const width = Math.max(margin * 2, viewportWidth() || canvasWidth());
-        const height = Math.max(margin * 2, viewportHeight() || canvasHeight());
+        const width = canvasWidth();
+        const height = canvasHeight();
+        const spawnWidth = Math.max(0, width - 2 * margin);
+        const spawnHeight = Math.max(0, height - 2 * margin);
         
-        // Exclude config panel area (360px on right side when visible)
-        const configPanelWidth = 360;
-        const rightMargin = margin + configPanelWidth; // Extra margin for config panel
-        
-        this.x = margin + TcRandom.random() * (width - margin - rightMargin);
-        this.y = margin + TcRandom.random() * (height - 2 * margin);
+        // Spawn within canvas bounds with margin
+        this.x = margin + TcRandom.random() * spawnWidth;
+        this.y = margin + TcRandom.random() * spawnHeight;
+        console.log(`[Resource] Random spawn at (${this.x.toFixed(0)}, ${this.y.toFixed(0)}) | Canvas: ${width}x${height} | Spawn area: ${spawnWidth}x${spawnHeight} | Margin: ${margin}`);
       }
 
       this.age = 0;

@@ -73,6 +73,7 @@ export function createWorld(context) {
     },
 
     reset() {
+      console.warn(`🔄 [World.reset()] CALLED | Canvas dimensions: ${canvasWidth()}x${canvasHeight()}`);
       Trail.clear();
       SignalField.clear();
       SignalResponseAnalytics.reset();

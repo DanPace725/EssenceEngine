@@ -16,7 +16,6 @@ export function initializeInputManager({
   getSignalField,
   getTrainingUI,
   getParticipationManager,
-  getCurrentScale,
   CONFIG
 }) {
   const held = new Set();

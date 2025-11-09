@@ -5,19 +5,8 @@
   <title>Essence Engine v0.0 — minimal viz up</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      background: #000;
-      height: 100%;
-      min-height: 100dvh;
-      overflow: hidden;
-      overscroll-behavior: contain;
-    }
-    canvas {
-      display: block;
-      touch-action: none;
-    }
+    html, body { margin: 0; padding: 0; background: #000; height: 100%; overflow: hidden; }
+    canvas { display: block; }
     /* Optional: crisp monospace HUD */
     @font-face { font-family: ui-mono; src: local("Consolas"), local("Menlo"), local("Monaco"); }
     #hud-container, #dashboard-container {
@@ -27,18 +16,17 @@
       background: rgba(0, 0, 0, 0.75);
       padding: 10px;
       border-bottom: 1px solid rgba(0, 255, 136, 0.3);
-      backdrop-filter: blur(6px);
     }
     #hud-container {
       position: fixed;
-      top: env(safe-area-inset-top, 0px);
+      top: 0;
       left: 0;
       right: 0;
       z-index: 1000;
     }
     #dashboard-container {
       position: fixed;
-      top: env(safe-area-inset-top, 0px);
+      top: 0;
       left: 0;
       right: 0;
       z-index: 1000;
@@ -72,14 +60,14 @@
     }
     #hotkey-strip {
       position: fixed;
-      bottom: env(safe-area-inset-bottom, 0px);
+      bottom: 0;
       left: 0;
       right: 0;
       background: rgba(0, 0, 0, 0.85);
       color: #00ff88;
       font-family: ui-mono, monospace;
       font-size: 11px;
-      padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+      padding: 8px 12px;
       border-top: 1px solid rgba(0, 255, 136, 0.3);
       z-index: 2000;
       display: flex;
@@ -115,125 +103,11 @@
       height: 16px;
       background: rgba(0, 255, 136, 0.2);
     }
-
-    #mobile-overlay-toggle {
-      position: fixed;
-      right: 12px;
-      bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-      z-index: 2100;
-      display: none;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 14px;
-      border: 1px solid rgba(0, 255, 136, 0.4);
-      border-radius: 999px;
-      background: rgba(0, 0, 0, 0.85);
-      color: #88ffbb;
-      font-family: ui-mono, monospace;
-      font-size: 12px;
-      letter-spacing: 0.02em;
-      cursor: pointer;
-      transition: background 0.2s ease, color 0.2s ease;
-    }
-
-    #mobile-overlay-toggle:focus-visible {
-      outline: 2px solid rgba(0, 255, 136, 0.6);
-      outline-offset: 2px;
-    }
-
-    #mobile-overlay-toggle[aria-pressed="true"] {
-      background: rgba(0, 40, 24, 0.85);
-      color: #b4ffd7;
-    }
-
-    body.is-mobile #mobile-overlay-toggle {
-      display: inline-flex;
-    }
-
-    body.is-mobile #hud-container,
-    body.is-mobile #dashboard-container {
-      max-height: min(60dvh, 420px);
-      margin: 0 auto;
-      width: min(640px, calc(100vw - 24px));
-      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.45);
-      border-radius: 10px;
-      border: 1px solid rgba(0, 255, 136, 0.2);
-      backdrop-filter: blur(8px);
-      transition: opacity 0.2s ease, transform 0.2s ease;
-    }
-
-    body.is-mobile #hud-container {
-      top: calc(env(safe-area-inset-top, 0px) + 10px);
-    }
-
-    body.is-mobile #dashboard-container {
-      top: calc(env(safe-area-inset-top, 0px) + 14px + var(--hud-offset, 0px));
-    }
-
-    body.is-mobile:not(.mobile-overlays-open) #hud-container,
-    body.is-mobile:not(.mobile-overlays-open) #dashboard-container {
-      opacity: 0;
-      pointer-events: none;
-      transform: translateY(-12px);
-      transition: opacity 0.2s ease, transform 0.2s ease;
-    }
-
-    body.is-mobile.mobile-overlays-open #hud-container,
-    body.is-mobile.mobile-overlays-open #dashboard-container {
-      opacity: 1;
-      pointer-events: auto;
-      transform: translateY(0);
-      transition: opacity 0.2s ease, transform 0.2s ease;
-    }
-
-    body.is-mobile #hotkey-strip {
-      font-size: 10px;
-      gap: 8px;
-      padding: 6px 10px calc(10px + env(safe-area-inset-bottom, 0px));
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-      scroll-snap-type: x proximity;
-      transition: transform 0.24s ease, opacity 0.18s ease;
-    }
-
-    body.is-mobile #hotkey-strip .hotkey-item {
-      flex: 0 0 auto;
-      scroll-snap-align: start;
-    }
-
-    body.is-mobile:not(.mobile-overlays-open) #hotkey-strip {
-      transform: translateY(120%);
-      opacity: 0;
-      pointer-events: none;
-    }
-
-    body.is-mobile.mobile-overlays-open #hotkey-strip {
-      transform: translateY(0);
-      opacity: 1;
-      pointer-events: auto;
-    }
-
-    @media (max-width: 768px) {
-      #dashboard-container table {
-        font-size: 10px;
-      }
-
-      .hotkey-desc {
-        display: none;
-      }
-
-      .hotkey-key {
-        min-width: 16px;
-      }
-    }
   </style>
 </head>
 <body>
   <div id="hud-container"></div>
   <div id="dashboard-container" class="hidden"></div>
-  <button id="mobile-overlay-toggle" type="button" aria-pressed="false" aria-controls="hud-container dashboard-container hotkey-strip">
-    HUD &amp; Hotkeys
-  </button>
   <div id="hotkey-strip">
     <div class="hotkey-item"><span class="hotkey-key">K</span><span class="hotkey-desc">Toggle Hotkeys</span></div>
     <div class="hotkey-divider"></div>

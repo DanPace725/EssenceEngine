@@ -32,10 +32,13 @@ export function getSpawnPressureMultiplier(aliveCount, minMultiplier = 0) {
  */
 export class FertilityGrid {
   constructor(width, height) {
+    console.log(`[FertilityGrid] Constructor called with: ${width}x${height}`);
     this.cell = CONFIG.plantEcology.fertilityCell;
     this.w = Math.max(1, Math.floor(width / this.cell));
     this.h = Math.max(1, Math.floor(height / this.cell));
     const len = this.w * this.h;
+    
+    console.log(`[FertilityGrid] Initialized: ${this.w}x${this.h} cells (${this.cell}px each) = ${this.w * this.cell}x${this.h * this.cell} world size | Input was: ${width}x${height}`);
     
     this.fertility = new Float32Array(len);
     this.lastHarvestTime = new Uint32Array(len); // Track when each cell was last harvested
@@ -193,19 +196,31 @@ export class FertilityGrid {
   /**
    * Find good spawn location based on fertility
    * Biased toward fertile areas
+   * 
+   * @param {number} margin - Margin from edges in pixels
+   * @param {number} maxWidth - Maximum world width (actual canvas width, not grid width)
+   * @param {number} maxHeight - Maximum world height (actual canvas height, not grid height)
    */
-  findFertileSpawnLocation(margin = 60) {
-    const width = this.w * this.cell;
-    const height = this.h * this.cell;
+  findFertileSpawnLocation(margin = 60, maxWidth = null, maxHeight = null) {
+    // Use actual canvas dimensions if provided, otherwise fall back to grid dimensions
+    // This prevents the quantization gap (grid rounds down to cell boundaries)
+    const width = maxWidth !== null ? maxWidth : (this.w * this.cell);
+    const height = maxHeight !== null ? maxHeight : (this.h * this.cell);
+    
+    // Ensure we have positive spawn area
+    const spawnWidth = Math.max(0, width - 2 * margin);
+    const spawnHeight = Math.max(0, height - 2 * margin);
+    
+    console.log(`[FertilityGrid] Finding spawn location | Grid: ${this.w}x${this.h} cells (${this.cell}px) | Grid world: ${this.w * this.cell}x${this.h * this.cell} | Spawn bounds: ${width}x${height} | Spawn area: ${spawnWidth}x${spawnHeight}`);
     
     // Try multiple candidates, pick most fertile
-    let bestX = margin + Math.random() * (width - 2 * margin);
-    let bestY = margin + Math.random() * (height - 2 * margin);
+    let bestX = margin + Math.random() * spawnWidth;
+    let bestY = margin + Math.random() * spawnHeight;
     let bestFertility = this.sampleAt(bestX, bestY);
     
     for (let attempt = 0; attempt < 8; attempt++) {
-      const x = margin + Math.random() * (width - 2 * margin);
-      const y = margin + Math.random() * (height - 2 * margin);
+      const x = margin + Math.random() * spawnWidth;
+      const y = margin + Math.random() * spawnHeight;
       const fertility = this.sampleAt(x, y);
       
       if (fertility > bestFertility) {
@@ -274,6 +289,8 @@ export class FertilityGrid {
 
 /**
  * Seed dispersal - resources can spawn near existing ones
+ * Note: This function doesn't have access to actual canvas dimensions,
+ * so it uses the parent resource position as reference (which should be in-bounds)
  */
 export function attemptSeedDispersal(resources, fertilityGrid, globalTick, dt, aliveCount = 0) {
   const config = CONFIG.plantEcology;
@@ -295,16 +312,21 @@ export function attemptSeedDispersal(resources, fertilityGrid, globalTick, dt, a
   const x = parent.x + Math.cos(angle) * distance;
   const y = parent.y + Math.sin(angle) * distance;
   
-  // Check if in bounds
+  // Check if in bounds (using fertility grid as reference, but being lenient)
+  // Parent resources are spawned with proper canvas bounds, so if we're near them we should be OK
   const margin = 60;
-  const width = fertilityGrid.w * fertilityGrid.cell;
-  const height = fertilityGrid.h * fertilityGrid.cell;
+  const gridWidth = fertilityGrid.w * fertilityGrid.cell;
+  const gridHeight = fertilityGrid.h * fertilityGrid.cell;
   
-  if (x < margin || x > width - margin || y < margin || y > height - margin) {
+  // Use grid dimensions + some tolerance for the quantization gap
+  const maxX = gridWidth + fertilityGrid.cell;  // Allow up to 1 cell beyond grid
+  const maxY = gridHeight + fertilityGrid.cell;
+  
+  if (x < margin || x > maxX - margin || y < margin || y > maxY - margin) {
     return null;
   }
   
-  // Check fertility
+  // Check fertility (will be 0 if outside grid bounds)
   const fertility = fertilityGrid.sampleAt(x, y);
   if (fertility < config.growthFertilityThreshold) {
     return null; // Too infertile, seed doesn't take
@@ -316,8 +338,10 @@ export function attemptSeedDispersal(resources, fertilityGrid, globalTick, dt, a
 
 /**
  * Spontaneous growth - resources can appear in fertile soil
+ * @param {number} canvasWidth - Actual canvas width (to avoid quantization gap)
+ * @param {number} canvasHeight - Actual canvas height (to avoid quantization gap)
  */
-export function attemptSpontaneousGrowth(fertilityGrid, dt, aliveCount = 0) {
+export function attemptSpontaneousGrowth(fertilityGrid, dt, aliveCount = 0, canvasWidth = null, canvasHeight = null) {
   const config = CONFIG.plantEcology;
   if (!config.enabled) return null;
 
@@ -328,8 +352,8 @@ export function attemptSpontaneousGrowth(fertilityGrid, dt, aliveCount = 0) {
   const growthChance = Math.min(1, config.growthChance * growthMultiplier * dt);
   if (Math.random() > growthChance) return null;
   
-  // Find fertile location
-  const location = fertilityGrid.findFertileSpawnLocation();
+  // Find fertile location (using actual canvas dimensions to avoid quantization gap)
+  const location = fertilityGrid.findFertileSpawnLocation(60, canvasWidth, canvasHeight);
   
   // Check fertility threshold
   if (location.fertility < config.growthFertilityThreshold) {
@@ -345,17 +369,18 @@ export function attemptSpontaneousGrowth(fertilityGrid, dt, aliveCount = 0) {
  */
 export function getResourceSpawnLocation(fertilityGrid, width, height) {
   if (CONFIG.plantEcology.enabled && fertilityGrid) {
-    return fertilityGrid.findFertileSpawnLocation();
+    // Use the actual canvas dimensions (width/height params) not the fertility grid's quantized size
+    // The fertility grid rounds down to cell boundaries, which can be smaller than the canvas
+    return fertilityGrid.findFertileSpawnLocation(60, width, height);
   }
   
   // Fallback: random spawn
+  // Note: width and height are already adjusted for UI panels by canvasManager
   const margin = 60;
-  const configPanelWidth = 360;
-  const rightMargin = margin + configPanelWidth;
   
   return {
-    x: margin + Math.random() * (width - margin - rightMargin),
-    y: margin + Math.random() * (height - 2 * margin),
+    x: margin + Math.random() * Math.max(0, width - 2 * margin),
+    y: margin + Math.random() * Math.max(0, height - 2 * margin),
     fertility: 0.5
   };
 }
