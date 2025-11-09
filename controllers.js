@@ -1,7 +1,6 @@
 // Controller Interface for Essence Engine AI
 // Enables pluggable behavior: heuristic OR learned policy
 
-import { CONFIG } from './config.js';
 import { TcRandom, TcScheduler } from './tcStorage.js';
 
 // ========== Base Controller ==========
@@ -50,14 +49,14 @@ export class Controller {
    *   thrust: float in [0, 1] - speed multiplier
    *   senseFrac: float in [0, 1] - sensing effort (0=base, 1=max)
    */
-  act(obs) {
+  act(_obs) {
     return { turn: 0, thrust: 0, senseFrac: 0 };
   }
   
   /**
    * Optional: update internal state per step
    */
-  update(dt) {}
+  update(_dt) {}
   
   /**
    * Optional: reset for new episode

@@ -2,7 +2,7 @@
 // Run with: node test-adaptive-rewards.js
 
 import { CONFIG } from './config.js';
-import { calculateAdaptiveReward, updateFindTimeEMA } from './rewards.js';
+import { calculateAdaptiveReward } from './rewards.js';
 
 console.log('🧪 Testing Adaptive Reward System\n');
 console.log('='.repeat(60));

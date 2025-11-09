@@ -22,8 +22,6 @@ const OBS_NAMES = [
   'trailDirY'      // 14
 ];
 
-const ACTION_NAMES = ['turn', 'thrust', 'senseFrac'];
-
 // Color codes for terminal output
 const COLORS = {
   reset: '\x1b[0m',

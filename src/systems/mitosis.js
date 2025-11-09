@@ -36,7 +36,7 @@ export function createMitosisSystem({
   const canvasHeight = () => getCanvasHeight();
   const mitosisConfig = config.mitosis;
 
-  function meetsPopulationLimits(parent) {
+  function meetsPopulationLimits(_parent) {
     const world = getWorld();
     const population = world?.bundles ?? [];
     const aliveCount = population.filter((b) => b.alive).length;

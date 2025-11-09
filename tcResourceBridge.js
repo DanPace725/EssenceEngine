@@ -264,7 +264,6 @@ export function drawRule110Overlay(ctx, stepper, canvasWidth, canvasHeight) {
     const activity = getRule110Activity(stepper);
     const labelText = `Rule 110: ${(activity * 100).toFixed(1)}% active`;
     ctx.font = '11px monospace';
-    const labelWidth = ctx.measureText(labelText).width;
     
     const barWidth = 180;
     const barHeight = 10;

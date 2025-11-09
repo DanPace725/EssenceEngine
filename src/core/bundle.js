@@ -200,7 +200,6 @@ export function createBundleClass(context) {
         // Better curve control point for smoother bends
         // Use look-ahead for better anticipation of curves
         const prev = i > 0 ? this.points[i - 1] : start;
-        const next = i < totalSegments - 1 ? this.points[i + 2] : end;
         
         // Catmull-Rom inspired control point
         const tension = 0.5;

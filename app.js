@@ -24,15 +24,14 @@ import { PIXI } from './lib/pixi.js';
 
 import { CONFIG } from './config.js';
 import { SignalField } from './signalField.js';
-import { HeuristicController, LinearPolicyController } from './controllers.js';
-import { RewardTracker, EpisodeManager, updateFindTimeEMA, calculateAdaptiveReward } from './rewards.js';
+import { EpisodeManager, updateFindTimeEMA, calculateAdaptiveReward } from './rewards.js';
 import { CEMLearner, TrainingManager } from './learner.js';
 import { TrainingUI } from './trainingUI.js';
 import { visualizeScentGradient, visualizeScentHeatmap } from './scentGradient.js';
-import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getResourceSpawnLocation, getSpawnPressureMultiplier } from './plantEcology.js';
+import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getSpawnPressureMultiplier } from './plantEcology.js';
 import { SignalResponseAnalytics } from './analysis/signalResponseAnalytics.js';
-import { TcScheduler, TcRandom, TcStorage } from './tcStorage.js';
-import { getRule110SpawnLocation, getRule110SpawnMultiplier, getRule110SpawnInfo, drawRule110Overlay } from './tcResourceBridge.js';
+import { TcScheduler } from './tcStorage.js';
+import { drawRule110Overlay } from './tcResourceBridge.js';
 import { createBundleClass } from './src/core/bundle.js';
 import { createResourceClass } from './src/core/resource.js';
 import { createWorld } from './src/core/world.js';
@@ -51,6 +50,9 @@ import {
   SIGNAL_BOND_CONFLICT_DAMP
 } from './app/constants.js';
 
+const getTerrainHeight = null;
+const loadedPolicyInfo = null;
+
 (() => {
     const canvas = document.getElementById("view");
     const ctx = canvas.getContext("2d", { alpha: false, desynchronized: true });
@@ -60,7 +62,7 @@ import {
     // Wait for layout to settle before reading window dimensions
     let actualWidth = window.innerWidth;
     let actualHeight = window.innerHeight;
-    let actualDPR = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
+    const actualDPR = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
     
     // On high-DPI displays, force a synchronous reflow to ensure dimensions are accurate
     if (actualDPR > 1) {
@@ -292,12 +294,6 @@ import {
       const base = Math.max(CONFIG.rewardChi || rewardChi || 0, 1e-6);
       return clamp(rewardChi / base, 0, 1);
     };
-    const mix = (a,b,t)=>a+(b-a)*t;
-    const randomRange = (min, max) => TcRandom.random() * (max - min) + min;
-    const smoothstep = (e0,e1,x)=> {
-      const t = clamp((x - e0) / Math.max(1e-6, e1 - e0), 0, 1);
-      return t * t * (3 - 2 * t);
-    };
     const getSignalConfig = () => CONFIG.signal || {};
     const getSignalSensitivity = (channel) => {
       const cfg = getSignalConfig();
@@ -352,16 +348,6 @@ import {
       }
 
       return applied;
-    };
-
-    const applyChiGain = ({ bundle, amount, reason }) => {
-      const gain = Math.max(0, Number.isFinite(amount) ? amount : 0);
-      return applyChiDelta({ bundle, delta: gain, reason });
-    };
-
-    const applyChiDrain = ({ bundle, amount, reason }) => {
-      const drain = Math.max(0, Number.isFinite(amount) ? amount : 0);
-      return applyChiDelta({ bundle, delta: -drain, reason });
     };
 
     const isEnergyParticipationActive = () => {
@@ -660,22 +646,6 @@ import {
         }
         L.strength = Math.min(2.0, Math.max(0, L.strength));
         L.age += dt;
-      }
-    }
-    function reinforceLinks(dt) {
-      // deposit faint trail along each link segment, scaled by strength
-      const samples = 10;
-      for (const L of Links) {
-        const a = getBundleById(L.aId);
-        const b = getBundleById(L.bId);
-        if (!a || !b) continue;
-        const depBase = CONFIG.depositPerSec * 0.1 * L.strength * dt;
-        for (let s = 0; s <= samples; s++) {
-          const t = s / samples;
-          const x = a.x + (b.x - a.x) * t;
-          const y = a.y + (b.y - a.y) * t;
-          Trail.deposit(x, y, depBase, 0); // authorId 0 for neutral paving
-        }
       }
     }
   
@@ -1683,7 +1653,6 @@ import {
       }
 
       let totalEnergyDelta = 0;
-      let totalChiSpent = 0;
       
       World.bundles.forEach((bundle) => {
         const chiBeforeUpdate = bundle.chi;
@@ -1702,7 +1671,6 @@ import {
           const chiSpent = Math.max(0, chiBeforeUpdate - bundle.chi);
           if (chiSpent > 0) {
             baselineMetricsTracker.onChiSpend(chiSpent, 'play-mode');
-            totalChiSpent += chiSpent;
           }
         }
         

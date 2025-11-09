@@ -3,16 +3,6 @@
 
 const fs = require('fs');
 
-// Observation feature names
-const OBS_NAMES = [
-  'chi', 'frustration', 'alive', 'vx', 'vy',
-  'wallNx', 'wallNy', 'wallMag',
-  'resDx', 'resDy', 'resVisible',
-  'trailMean', 'trailMax', 'trailDirX', 'trailDirY'
-];
-
-const ACTION_NAMES = ['turn', 'thrust', 'senseFrac'];
-
 function loadPolicy(filename) {
   try {
     const data = fs.readFileSync(filename, 'utf8');

@@ -3,9 +3,6 @@ import { getResourceSpawnLocation } from '../../plantEcology.js';
 import { getRule110SpawnInfo } from '../../tcResourceBridge.js';
 import { TcRandom } from '../../tcStorage.js';
 
-const defaultViewportWidth = () => (typeof innerWidth === 'number' ? innerWidth : 0);
-const defaultViewportHeight = () => (typeof innerHeight === 'number' ? innerHeight : 0);
-
 export function createResourceClass(context) {
   if (!context || typeof context !== 'object') {
     throw new Error('context is required to create Resource class');
@@ -19,8 +16,6 @@ export function createResourceClass(context) {
     getFertilityField,
     getRule110Stepper,
     getTerrainHeight,
-    getViewportWidth = defaultViewportWidth,
-    getViewportHeight = defaultViewportHeight,
     getResourcesContainer
   } = context;
 
@@ -51,20 +46,6 @@ export function createResourceClass(context) {
     return null;
   };
   const terrainHeight = typeof getTerrainHeight === 'function' ? getTerrainHeight : null;
-  const viewportWidth = () => {
-    try {
-      return getViewportWidth();
-    } catch (err) {
-      return defaultViewportWidth();
-    }
-  };
-  const viewportHeight = () => {
-    try {
-      return getViewportHeight();
-    } catch (err) {
-      return defaultViewportHeight();
-    }
-  };
 
   return class Resource {
     constructor(x, y, r) {
@@ -279,7 +260,7 @@ export function createResourceClass(context) {
       }
     }
 
-    update(dt) {
+    update(_dt) {
       this.age++;
       this.updateCooldown();
     }

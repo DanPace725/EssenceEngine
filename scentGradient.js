@@ -26,24 +26,27 @@ export function calculateScentIntensity(distance, config = CONFIG.scentGradient)
       intensity = 1 - normalizedDist;
       break;
       
-    case 'inverse':
+    case 'inverse': {
       // Inverse falloff: intensity = 1 / (1 + k*d)
       const k1 = 3.0 / config.maxRange; // tuning constant
       intensity = 1 / (1 + k1 * distance);
       break;
+    }
       
-    case 'inverse-square':
+    case 'inverse-square': {
       // Inverse-square falloff: intensity = 1 / (1 + k*d²)
       // Similar to physics (light, gravity, etc.)
       const k2 = 10.0 / (config.maxRange * config.maxRange);
       intensity = 1 / (1 + k2 * distance * distance);
       break;
+    }
       
-    case 'exponential':
+    case 'exponential': {
       // Exponential falloff: intensity = e^(-λd)
       const lambda = 3.0 / config.maxRange;
       intensity = Math.exp(-lambda * distance);
       break;
+    }
       
     default:
       intensity = 1 - normalizedDist;

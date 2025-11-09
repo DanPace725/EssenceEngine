@@ -233,7 +233,6 @@ export function createWorld(context) {
       if (CONFIG.plantEcology.enabled) {
         // Plant ecology manages resources via fertility, seed dispersal, etc.
         // Just update carrying capacity for mitosis population limits
-        const aliveCount = this.bundles.filter(b => b.alive).length;
         this.carryingCapacity = Math.max(
           CONFIG.resourceStableMin,
           Math.floor(this.resources.length * 1.2)  // Loose cap based on current resources

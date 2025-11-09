@@ -10,11 +10,10 @@
 // Browser-compatible stubs for Node.js modules
 const fs = null;
 const path = {
-  isAbsolute: (p) => false,
+  isAbsolute: (_p) => false,
   resolve: (...args) => args[args.length - 1],
-  dirname: (p) => ''
+  dirname: (_p) => ''
 };
-const __filename = '';
 const __dirname = '';
 const hasFs = false;
 const isBrowser = typeof window !== 'undefined' && typeof document !== 'undefined';
@@ -22,7 +21,7 @@ const localStorageRef = (() => {
   if (!isBrowser) return null;
   try {
     return window.localStorage;
-  } catch (err) {
+  } catch {
     return null;
   }
 })();
@@ -43,8 +42,8 @@ const validateTapeSnapshotSchema = (schemaRef) => {
   try {
     const contents = fs.readFileSync(resolved, 'utf8');
     JSON.parse(contents);
-  } catch (err) {
-    console.warn(`Failed to validate tape snapshot schema '${schemaRef}':`, err?.message || err);
+  } catch (error) {
+    console.warn(`Failed to validate tape snapshot schema '${schemaRef}':`, error?.message || error);
   }
   return resolved;
 };
@@ -64,8 +63,8 @@ const loadTapeMachineEntry = (entry, id, schemaRef) => {
       if (!parsed.id) parsed.id = id;
       if (schemaRef && !parsed.snapshotSchema) parsed.snapshotSchema = schemaRef;
       return parsed;
-    } catch (err) {
-      console.warn(`Failed to load tape machine '${id}' from '${entry}':`, err?.message || err);
+    } catch (error) {
+      console.warn(`Failed to load tape machine '${id}' from '${entry}':`, error?.message || error);
       return null;
     }
   }
@@ -92,8 +91,8 @@ const loadTapeMachinesFromConfig = (tcConfig = {}) => {
     if (!descriptor) continue;
     try {
       TapeMachineRegistry.register(descriptor, null, { overwrite: true });
-    } catch (err) {
-      console.warn(`Failed to register tape machine '${machineId}':`, err?.message || err);
+    } catch (error) {
+      console.warn(`Failed to register tape machine '${machineId}':`, error?.message || error);
     }
   }
 };
@@ -1145,7 +1144,7 @@ const ConfigIO = {
     if (!localStorageRef) return;
     try {
       localStorageRef.setItem(PROFILES_KEY, JSON.stringify(list));
-    } catch (err) {
+    } catch {
       // Ignore storage errors in non-browser or quota-limited contexts
     }
   }
@@ -1212,7 +1211,7 @@ function onConfigChanged() {
   if (typeof window.updateParticipationStatusDisplay === 'function') {
     try {
       window.updateParticipationStatusDisplay(window.ParticipationManager?.state || {});
-    } catch (err) {
+    } catch {
       // Ignore UI update errors to avoid interrupting config flow
     }
   }
@@ -1453,9 +1452,9 @@ function buildConfigPanel(){
         row.setAttribute("title", hint);
         const label = row.querySelector("label");
         if (label) label.setAttribute("title", hint);
-        row.querySelectorAll("span").forEach(el => el.setAttribute("title", hint));
-        row.querySelectorAll("input").forEach(el => el.setAttribute("title", hint));
-        row.querySelectorAll("select").forEach(el => el.setAttribute("title", hint));
+        row.querySelectorAll("span").forEach(elem => elem.setAttribute("title", hint));
+        row.querySelectorAll("input").forEach(elem => elem.setAttribute("title", hint));
+        row.querySelectorAll("select").forEach(elem => elem.setAttribute("title", hint));
 
         // Add visual indicator that tooltip exists
         const labelSpan = row.querySelector("span");
@@ -1670,8 +1669,7 @@ function buildConfigPanel(){
 
 function togglePanel(force){
   if (!isBrowser) return;
-  const el = document.getElementById("config-panel") || buildConfigPanel();
-  const node = document.getElementById("config-panel");
+  const node = document.getElementById("config-panel") || buildConfigPanel();
   if (!node) return;
   const wasOpen = panelOpen;
   panelOpen = force ?? !panelOpen;

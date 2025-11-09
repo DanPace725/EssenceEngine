@@ -176,7 +176,7 @@ const emitDebugEvent = (event, detail = {}, telemetry) => {
     if (typeof store.emit === 'function') {
       try {
         store.emit('participation', record);
-      } catch (_error) {
+      } catch {
         // Ignore debug channel emit errors
       }
     }
@@ -399,7 +399,7 @@ const resolvePointerMode = (payload) => {
 function getConfig() {
   try {
     return hooks.configResolver(state) || {};
-  } catch (error) {
+  } catch {
     return {};
   }
 }

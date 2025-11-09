@@ -66,7 +66,7 @@ export function collectResource({
         logger.log(
           `[Adaptive Reward] Find #${world.collected}: dt=${dtFind.toFixed(2)}s, avgT=${world.avgFindTime.toFixed(2)}s, reward=${rewardChi.toFixed(2)}χ`
         );
-      } catch (error) {
+      } catch {
         // Logging should never break simulation
       }
     }

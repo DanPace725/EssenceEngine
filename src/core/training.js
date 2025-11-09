@@ -984,7 +984,7 @@ export function createTrainingModule({
             }
             
             // Load optimizer state
-            const optimizer = ensureConfigTrainingManager(data.metadata?.objective || 'balanced');
+            ensureConfigTrainingManager(data.metadata?.objective || 'balanced');
             configOptimizer.load(data.optimizerState);
             
             console.log('Config loaded:', data.metadata);

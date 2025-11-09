@@ -107,7 +107,7 @@ export class MetricsTracker {
    * @param {number} amount - Amount of chi spent
    * @param {string} reason - Reason for spending (optional)
    */
-  onChiSpend(amount, reason = "misc") {
+  onChiSpend(amount, _reason = "misc") {
     this.state.chiSpent += Math.max(0, amount);
   }
   
@@ -191,11 +191,9 @@ export class MetricsTracker {
     // Track new coverage (trail > eps)
     if (trail && trail.buf && this.state.seenCells) {
       let newly = 0;
-      let active = 0;
       
       for (let i = 0; i < trail.buf.length; i++) {
         if (trail.buf[i] > this.eps) {
-          active++;
           if (!this.state.seenCells[i]) {
             this.state.seenCells[i] = 1;
             newly++;

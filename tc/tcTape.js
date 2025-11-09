@@ -13,7 +13,7 @@ const MOVE_DELTAS = Object.freeze({
 
 const normalizeMove = (value) => {
   const move = typeof value === 'string' ? value.toUpperCase() : 'N';
-  return MOVE_DELTAS.hasOwnProperty(move) ? move : 'N';
+  return move in MOVE_DELTAS ? move : 'N';
 };
 
 const ensureObject = (value, fallback = {}) => (value && typeof value === 'object') ? value : { ...fallback };
@@ -221,7 +221,7 @@ const createTapeMachineStepper = (options = {}) => {
       return chunkCache.get(chunkIndex);
     }
     const key = getChunkKey(chunkIndex);
-    let data = storage.getChunk(key);
+    const data = storage.getChunk(key);
     if (data instanceof Uint8Array && data.length === chunkSize) {
       const entry = { key, data };
       chunkCache.set(chunkIndex, entry);
@@ -443,7 +443,7 @@ const createTapeMachineStepper = (options = {}) => {
     return snapshot;
   };
 
-  const compute = (ctx = {}) => {
+  const compute = (_ctx = {}) => {
     const action = computeAction();
     return action || null;
   };
