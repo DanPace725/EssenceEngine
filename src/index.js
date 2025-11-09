@@ -7,8 +7,6 @@ import '../app.js';
 if (typeof window !== 'undefined') {
   const scheduleInitialResize = () => {
     if (typeof window.resizeCanvas === 'function') {
-      console.log('[index.js] scheduleInitialResize called, devicePixelRatio:', window.devicePixelRatio);
-      
       // First pass now
       window.resizeCanvas();
       
@@ -17,7 +15,6 @@ if (typeof window !== 'undefined') {
       window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => {
           if (typeof window.resizeCanvas === 'function') {
-            console.log('[index.js] Second resize pass (after double RAF)');
             window.resizeCanvas();
           }
           
@@ -26,18 +23,9 @@ if (typeof window !== 'undefined') {
           if (window.devicePixelRatio > 1) {
             setTimeout(() => {
               if (typeof window.resizeCanvas === 'function') {
-                console.log('[index.js] Third resize pass (high-DPI, after 50ms)');
                 window.resizeCanvas();
               }
             }, 50);
-            
-            // Fourth pass: even more aggressive for stubborn Surface laptops
-            setTimeout(() => {
-              if (typeof window.resizeCanvas === 'function') {
-                console.log('[index.js] Fourth resize pass (high-DPI, after 200ms)');
-                window.resizeCanvas();
-              }
-            }, 200);
           }
         });
       });

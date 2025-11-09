@@ -49,10 +49,6 @@ import { MetricsTracker } from './src/core/metricsTracker.js';
     // ---------- PixiJS Integration ----------
     // IMPORTANT: Get stable dimensions for high-DPI displays (Surface laptops, etc.)
     // Wait for layout to settle before reading window dimensions
-    console.log(`[app.js] Initializing: window.devicePixelRatio=${window.devicePixelRatio}`);
-    console.log(`[app.js] Initializing: window.innerWidth=${window.innerWidth}, window.innerHeight=${window.innerHeight}`);
-    console.log(`[app.js] Initializing: clientWidth=${document.documentElement.clientWidth}, clientHeight=${document.documentElement.clientHeight}`);
-    
     let actualWidth = window.innerWidth;
     let actualHeight = window.innerHeight;
     let actualDPR = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
@@ -64,8 +60,6 @@ import { MetricsTracker } from './src/core/metricsTracker.js';
         actualHeight = document.documentElement.clientHeight || window.innerHeight;
     }
     
-    console.log(`[app.js] Creating PixiJS with: ${actualWidth}x${actualHeight}, resolution=${actualDPR}`);
-    
     const pixiApp = new PIXI.Application({
         width: actualWidth,
         height: actualHeight,
@@ -76,8 +70,6 @@ import { MetricsTracker } from './src/core/metricsTracker.js';
         antialias: true,  // Enable anti-aliasing for smooth edges
         powerPreference: 'high-performance'
     });
-    
-    console.log(`[app.js] PixiJS created: renderer.width=${pixiApp.renderer.width}, renderer.height=${pixiApp.renderer.height}, renderer.resolution=${pixiApp.renderer.resolution}`);
     const resourcesContainer = new PIXI.Container();
     resourcesContainer.sortableChildren = true;
     pixiApp.stage.addChild(resourcesContainer);
@@ -904,8 +896,6 @@ import { MetricsTracker } from './src/core/metricsTracker.js';
     let FertilityField = null;
 
     canvasManager.onResize(({ width, height, dpr }) => {
-      console.log(`[app.js onResize] Resize callback received: ${width}x${height}, DPR: ${dpr}`);
-      
       if (Trail && Trail.resize) {
         Trail.resize();
       }
@@ -915,9 +905,7 @@ import { MetricsTracker } from './src/core/metricsTracker.js';
       }
 
       if (CONFIG.plantEcology.enabled && typeof FertilityGrid !== 'undefined') {
-        console.log(`[app.js onResize] Creating new FertilityGrid with: ${width}x${height}`);
         FertilityField = new FertilityGrid(width, height);
-        console.log(`[app.js onResize] FertilityGrid created: ${FertilityField.w}x${FertilityField.h} cells = ${FertilityField.w * FertilityField.cell}x${FertilityField.h * FertilityField.cell} world size`);
       }
       
       // CRITICAL: Update PixiJS renderer resolution AND dimensions
@@ -927,7 +915,6 @@ import { MetricsTracker } from './src/core/metricsTracker.js';
     });
 
     // Call initial resize - this will create FertilityField with correct dimensions
-    console.log(`[app.js] Calling initial canvasManager.resizeCanvas()`);
     canvasManager.resizeCanvas();
   
     
