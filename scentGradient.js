@@ -212,7 +212,6 @@ export function visualizeScentGradient(ctx, resources, gridSize = 80) {
   
   ctx.save();
   ctx.strokeStyle = '#00ff88';
-  ctx.globalAlpha = 0.3;
   ctx.lineWidth = 1;
   
   for (let x = gridSize / 2; x < w; x += gridSize) {
@@ -221,16 +220,19 @@ export function visualizeScentGradient(ctx, resources, gridSize = 80) {
       
       if (scent.intensity > 0.05) {
         // Draw vector showing gradient direction
-        const arrowLen = scent.intensity * 30;
+        const arrowLen = 25; // Fixed length for all arrows
         const endX = x + scent.gradientX * arrowLen;
         const endY = y + scent.gradientY * arrowLen;
-        
+
+        // Set opacity based on intensity (stronger scent = more opaque)
+        ctx.globalAlpha = Math.min(0.8, scent.intensity * 0.6);
+
         // Arrow body
         ctx.beginPath();
         ctx.moveTo(x, y);
         ctx.lineTo(endX, endY);
         ctx.stroke();
-        
+
         // Arrow head
         const angle = Math.atan2(scent.gradientY, scent.gradientX);
         const headLen = 5;

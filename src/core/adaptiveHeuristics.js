@@ -231,15 +231,13 @@ export class AdaptiveHeuristics {
     gradients.frustrationDecayRate = learningSignal * 0.05;
 
     // === Hunger Amplifiers ===
-    
-    const hunger = observation.hunger || 0;
-    const hungerSignal = learningSignal * hunger;
-    
-    // Amplifiers: increase hunger effects when they lead to success
-    gradients.hungerExplorationAmp = hungerSignal * 0.04;
-    gradients.hungerFrustrationAmp = hungerSignal * 0.04;
-    gradients.hungerSenseAmp = hungerSignal * 0.04;
-    gradients.hungerSurgeAmp = hungerSignal * 0.03;
+
+    // Hunger amplifiers should learn based on reward signal like other parameters
+    // They control hunger's behavioral impact, so learn when doing well/poorly regardless of current hunger
+    gradients.hungerExplorationAmp = learningSignal * 0.04;
+    gradients.hungerFrustrationAmp = learningSignal * 0.04;
+    gradients.hungerSenseAmp = learningSignal * 0.04;
+    gradients.hungerSurgeAmp = learningSignal * 0.03;
 
     // === Signals ===
     

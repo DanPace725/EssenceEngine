@@ -217,7 +217,7 @@ export function renderFrame(ctx, world, CONFIG, systems) {
 
     // Draw scent visualization if enabled
     if (systems.inputState.showScentGradient && CONFIG.scentGradient.enabled) {
-        systems.visualizeScentHeatmap(ctx, world.resources, 40);
+        // systems.visualizeScentHeatmap(ctx, world.resources, 40); // Removed green background
         systems.visualizeScentGradient(ctx, world.resources, 80);
     }
 

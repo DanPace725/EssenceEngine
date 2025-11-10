@@ -28,7 +28,7 @@ import { EpisodeManager, updateFindTimeEMA, calculateAdaptiveReward } from './re
 import { buildObservation } from './observations.js';
 import { CEMLearner, TrainingManager } from './learner.js';
 import { TrainingUI, AdaptiveHeuristicsUI } from './trainingUI.js';
-import { visualizeScentGradient, visualizeScentHeatmap } from './scentGradient.js';
+import { visualizeScentGradient } from './scentGradient.js';
 import { FertilityGrid, attemptSeedDispersal, attemptSpontaneousGrowth, getSpawnPressureMultiplier } from './plantEcology.js';
 import { SignalResponseAnalytics } from './analysis/signalResponseAnalytics.js';
 import { TcScheduler } from './tcStorage.js';
@@ -2116,7 +2116,7 @@ let trainingModule = null;
       }
 
       if (inputState.showScentGradient && CONFIG.scentGradient.enabled) {
-        visualizeScentHeatmap(ctx, World.resources, 40);
+        // visualizeScentHeatmap(ctx, World.resources, 40); // Removed green background
         visualizeScentGradient(ctx, World.resources, 80);
       }
 

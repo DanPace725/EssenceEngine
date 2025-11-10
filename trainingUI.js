@@ -17,22 +17,22 @@ export class TrainingUI {
     this.panel.id = 'training-panel';
     this.panel.style.cssText = `
       position: fixed;
-      top: 10px;
+      top: 60px;
       right: 10px;
-      background: rgba(0, 0, 0, 0.85);
+      background: rgba(0, 0, 0, 0.9);
       color: #00ff88;
       font-family: 'Courier New', monospace;
       font-size: 12px;
       padding: 15px;
       border: 2px solid #00ff88;
       border-radius: 5px;
-      min-width: 320px;
-      width: 320px;
-      max-height: 80vh;
+      min-width: 380px;
+      width: 380px;
+      max-height: 85vh;
       overflow-y: auto;
       overflow-x: hidden;
       display: none;
-      z-index: 1000;
+      z-index: 1001;
       box-sizing: border-box;
     `;
     
@@ -58,19 +58,21 @@ export class TrainingUI {
     trainingSection.innerHTML += `
       <div style="margin: 10px 0;">
         <label style="display: block; margin-bottom: 5px;">Generations:</label>
-        <input type="number" id="num-generations" value="10" min="1" max="100" 
+        <input type="number" id="num-generations" value="10" min="1" max="100"
                style="width: 100%; box-sizing: border-box; padding: 5px;">
       </div>
-      <button id="start-training" style="margin: 5px 0;">▶️ Start Training</button>
-      <button id="stop-training" style="margin: 5px 0;" disabled>⏸️ Stop</button>
-      <button id="reset-learner" style="margin: 5px 0;">🔄 Reset Learner</button>
+      <div style="display: flex; gap: 5px; margin-bottom: 8px;">
+        <button id="start-training" style="flex: 1;">▶️ Start Training</button>
+        <button id="stop-training" style="flex: 1;" disabled>⏸️ Stop</button>
+      </div>
+      <button id="reset-learner" style="width: 100%; margin: 5px 0;">🔄 Reset Learner</button>
     `;
     this.panel.appendChild(trainingSection);
     
     // Stats display
     const statsSection = this.createSection('Statistics');
     statsSection.innerHTML += `
-      <div id="training-stats" style="margin: 10px 0; font-size: 11px;">
+      <div id="training-stats" style="margin: 10px 0; font-size: 12px;">
         <div>Generation: <span id="stat-generation">0</span></div>
         <div>Policy: <span id="stat-policy">-</span></div>
         <div>Best Reward: <span id="stat-best">-</span></div>
@@ -87,21 +89,25 @@ export class TrainingUI {
     // Policy management
     const policySection = this.createSection('Policy');
     policySection.innerHTML += `
-      <button id="save-policy" style="margin: 5px 0;">💾 Save Best Policy</button>
-      <button id="load-policy" style="margin: 5px 0;">📂 Load Policy</button>
-      <div id="loaded-policy-info" style="margin: 10px 0; padding: 8px; background: rgba(255,255,0,0.1); border: 1px solid #ffff00; display: none; font-size: 10px;">
+      <div style="display: flex; gap: 5px; margin-bottom: 8px;">
+        <button id="save-policy" style="flex: 1;">💾 Save Best</button>
+        <button id="load-policy" style="flex: 1;">📂 Load</button>
+      </div>
+      <div id="loaded-policy-info" style="margin: 10px 0; padding: 8px; background: rgba(255,255,0,0.1); border: 1px solid #ffff00; display: none; font-size: 12px;">
         <div style="font-weight: bold; color: #ffff00; margin-bottom: 4px;">📁 Loaded Policy:</div>
         <div id="policy-filename" style="color: #fff; margin-bottom: 4px;">None</div>
-        <div id="policy-details" style="color: #aaa; font-size: 9px;">Generation: - | Reward: -</div>
+        <div id="policy-details" style="color: #aaa; font-size: 12px;">Generation: - | Reward: -</div>
       </div>
-      <button id="use-policy" style="margin: 5px 0; display: none;">✅ Use This Policy</button>
-      <button id="test-policy" style="margin: 5px 0;">🎮 Test Best Policy</button>
+      <div style="display: flex; gap: 5px; margin-bottom: 8px;">
+        <button id="use-policy" style="flex: 1; display: none;">✅ Use Policy</button>
+        <button id="test-policy" style="flex: 1;">🎮 Test Best</button>
+      </div>
       <div style="margin-top: 10px; border-top: 1px solid #333; padding-top: 10px;">
-        <div style="font-size: 10px; color: #888; margin-bottom: 5px;">Training Metrics Export:</div>
-        <button id="export-metrics" style="margin: 5px 0;">📊 Export Training Metrics</button>
-        <div style="margin-top:8px;">
-          <button id="export-state" style="margin: 5px 0;">📁 Export Simulation State</button>
-          <button id="import-state" style="margin: 5px 0;">📂 Import Simulation State</button>
+        <div style="font-size: 12px; color: #888; margin-bottom: 5px;">Training Metrics Export:</div>
+        <button id="export-metrics" style="width: 100%; margin: 5px 0;">📊 Export Training Metrics</button>
+        <div style="display: flex; gap: 5px; margin-top: 8px;">
+          <button id="export-state" style="flex: 1;">📁 Export State</button>
+          <button id="import-state" style="flex: 1;">📂 Import State</button>
         </div>
       </div>
     `;
@@ -110,17 +116,17 @@ export class TrainingUI {
     // Baseline metrics collection
     const baselineSection = this.createSection('Baseline Metrics');
     baselineSection.innerHTML += `
-      <div style="font-size: 10px; color: #aaa; margin-bottom: 8px;">
+      <div style="font-size: 12px; color: #aaa; margin-bottom: 8px;">
         Collect metrics from heuristic AI in play mode to establish baseline performance.
       </div>
-      <div style="display: flex; gap: 5px; margin-bottom: 5px;">
+      <div style="display: flex; gap: 5px; margin-bottom: 8px;">
         <button id="start-baseline" style="flex: 1;">▶️ Start</button>
         <button id="stop-baseline" style="flex: 1;" disabled>⏸️ Stop</button>
       </div>
-      <div id="baseline-status" style="font-size: 10px; color: #888; margin: 5px 0; min-height: 14px;">
+      <div id="baseline-status" style="font-size: 12px; color: #888; margin: 5px 0; min-height: 14px;">
         Not collecting
       </div>
-      <button id="export-baseline" style="margin: 5px 0; width: 100%;">📊 Export Baseline Metrics</button>
+      <button id="export-baseline" style="width: 100%; margin: 5px 0;">📊 Export Baseline Metrics</button>
     `;
     this.panel.appendChild(baselineSection);
 
@@ -128,11 +134,11 @@ export class TrainingUI {
     // Config Optimization section
     const configOptSection = this.createSection('Config Optimization');
     configOptSection.innerHTML += `
-      <div style="font-size: 10px; color: #aaa; margin-bottom: 8px;">
+      <div style="font-size: 12px; color: #aaa; margin-bottom: 8px;">
         Use CEM to optimize CONFIG parameters based on composite metrics.
       </div>
       <div style="margin: 10px 0;">
-        <label style="display: block; margin-bottom: 5px; font-size: 11px;">Objective:</label>
+        <label style="display: block; margin-bottom: 5px; font-size: 12px;">Objective:</label>
         <select id="config-objective" style="width: 100%; box-sizing: border-box; padding: 5px; background: #222; color: #0f8; border: 1px solid #444;">
           <option value="balanced">Balanced (F+C+R)</option>
           <option value="F">Foraging (F)</option>
@@ -141,29 +147,29 @@ export class TrainingUI {
         </select>
       </div>
       <div style="margin: 10px 0;">
-        <label style="display: block; margin-bottom: 5px; font-size: 11px;">Generations:</label>
-        <input type="number" id="config-generations" value="5" min="1" max="50" 
+        <label style="display: block; margin-bottom: 5px; font-size: 12px;">Generations:</label>
+        <input type="number" id="config-generations" value="5" min="1" max="50"
                style="width: 100%; box-sizing: border-box; padding: 5px; background: #222; color: #0f8; border: 1px solid #444;">
       </div>
-      <div style="display: flex; gap: 5px; margin-bottom: 5px;">
+      <div style="display: flex; gap: 5px; margin-bottom: 8px;">
         <button id="start-config-opt" style="flex: 1;">🚀 Start</button>
         <button id="stop-config-opt" style="flex: 1;" disabled>⏸️ Stop</button>
       </div>
-      <div id="config-opt-stats" style="font-size: 10px; color: #888; margin: 8px 0; padding: 8px; background: rgba(0,0,0,0.3); border: 1px solid #333;">
+      <div id="config-opt-stats" style="font-size: 12px; color: #888; margin: 8px 0; padding: 8px; background: rgba(0,0,0,0.3); border: 1px solid #333;">
         <div>Generation: <span id="config-gen">0</span></div>
         <div>Best Fitness: <span id="config-best-fit">-</span></div>
         <div>Convergence: <span id="config-convergence">-</span></div>
-        <div style="margin-top: 5px; color: #666; font-size: 9px;">Status: <span id="config-status">Idle</span></div>
+        <div style="margin-top: 5px; color: #666; font-size: 12px;">Status: <span id="config-status">Idle</span></div>
       </div>
       <div style="display: flex; gap: 5px; margin-bottom: 5px;">
-        <button id="save-config" style="flex: 1; font-size: 10px;">💾 Save</button>
-        <button id="load-config" style="flex: 1; font-size: 10px;">📂 Load</button>
+        <button id="save-config" style="flex: 1; font-size: 12px;">💾 Save</button>
+        <button id="load-config" style="flex: 1; font-size: 12px;">📂 Load</button>
       </div>
       <div style="display: flex; gap: 5px;">
-        <button id="apply-config" style="flex: 1; font-size: 10px;" disabled>✅ Apply</button>
-        <button id="test-config" style="flex: 1; font-size: 10px;" disabled>🎮 Test</button>
+        <button id="apply-config" style="flex: 1; font-size: 12px;" disabled>✅ Apply</button>
+        <button id="test-config" style="flex: 1; font-size: 12px;" disabled>🎮 Test</button>
       </div>
-      <div style="font-size: 9px; color: #666; margin-top: 5px; padding: 5px; background: rgba(0,0,0,0.3); border-radius: 3px;">
+      <div style="font-size: 12px; color: #666; margin-top: 5px; padding: 5px; background: rgba(0,0,0,0.3); border-radius: 3px;">
         💡 <strong>Apply</strong> updates CONFIG values<br>
         💡 <strong>Test</strong> applies + resets world for visual testing
       </div>
@@ -179,7 +185,7 @@ export class TrainingUI {
     
     // Keyboard shortcut hint
     const hint = document.createElement('div');
-    hint.style.cssText = 'margin-top: 15px; font-size: 10px; color: #666; border-top: 1px solid #333; padding-top: 10px;';
+    hint.style.cssText = 'margin-top: 15px; font-size: 12px; color: #666; border-top: 1px solid #333; padding-top: 10px;';
     hint.innerHTML = 'Press [L] to toggle this panel';
     this.panel.appendChild(hint);
     
@@ -191,8 +197,8 @@ export class TrainingUI {
   
   createSection(title) {
     const section = document.createElement('div');
-    section.style.cssText = 'margin: 15px 0; padding: 10px; background: rgba(0,255,136,0.05); border-left: 3px solid #00ff88; box-sizing: border-box; overflow: hidden;';
-    section.innerHTML = `<div style="font-weight: bold; margin-bottom: 8px; color: #00ffff;">${title}</div>`;
+    section.style.cssText = 'margin: 12px 0; padding: 8px; background: rgba(0,255,136,0.05); border-left: 2px solid #00ff88; box-sizing: border-box;';
+    section.innerHTML = `<div style="font-weight: bold; margin-bottom: 6px; color: #00ffff; font-size: 11px;">${title}</div>`;
     return section;
   }
   
@@ -573,7 +579,7 @@ export class AdaptiveHeuristicsUI {
       background: rgba(0, 0, 0, 0.9);
       color: #00ff88;
       font-family: 'Courier New', monospace;
-      font-size: 11px;
+      font-size: 12px;
       padding: 15px;
       border: 2px solid #00ff88;
       border-radius: 5px;
@@ -595,10 +601,10 @@ export class AdaptiveHeuristicsUI {
     // Status section
     const statusSection = this.createSection('Status');
     statusSection.innerHTML += `
-      <div id="ah-status" style="font-size: 10px; color: #888; margin: 5px 0;">
+      <div id="ah-status" style="font-size: 12px; color: #888; margin: 5px 0;">
         Disabled
       </div>
-      <div id="ah-stats" style="font-size: 10px; color: #ccc; margin: 5px 0;">
+      <div id="ah-stats" style="font-size: 12px; color: #ccc; margin: 5px 0;">
         <div>Samples: <span id="ah-samples">0</span></div>
         <div>Avg Reward: <span id="ah-reward">0.00</span></div>
       </div>
@@ -622,10 +628,10 @@ export class AdaptiveHeuristicsUI {
     // Live parameters
     const paramsSection = this.createSection('Live Parameters');
     paramsSection.innerHTML += `
-      <div style="font-size: 10px; color: #aaa; margin-bottom: 8px;">
+      <div style="font-size: 12px; color: #aaa; margin-bottom: 8px;">
         Color coding: <span style="color: #4dffaa;">🟢 >1.0</span> <span style="color: #ff8866;">🔴 <1.0</span> <span style="color: #ccc;">⚪ =1.0</span>
       </div>
-      <div id="ah-params" style="font-size: 10px; color: #ccc;">
+      <div id="ah-params" style="font-size: 12px; color: #ccc;">
         <div style="margin-bottom: 4px;"><strong style="color: #88ffff;">Movement:</strong></div>
         <div>• Speed: <span id="ah-speed">1.00</span> • Cost: <span id="ah-cost">1.00</span> • Wall Avoid: <span id="ah-wall">1.00</span></div>
         <div>• Resource Seek: <span id="ah-resource">1.00</span></div>
@@ -648,11 +654,11 @@ export class AdaptiveHeuristicsUI {
     // Learning curves section
     const curvesSection = this.createSection('Learning Curves');
     curvesSection.innerHTML += `
-      <div style="font-size: 9px; color: #aaa; margin-bottom: 5px;">
+      <div style="font-size: 12px; color: #aaa; margin-bottom: 5px;">
         Reward trends (last ${this.maxHistoryPoints} samples)
       </div>
       <canvas id="ah-learning-chart" width="100" height="80" style="background: #111; border: 1px solid #333; display: block; max-width: 100%;"></canvas>
-      <div style="font-size: 9px; color: #666; margin-top: 5px;">
+      <div style="font-size: 12px; color: #666; margin-top: 5px;">
         <span style="color: #00ff88;">▬ Best</span> <span style="color: #ffaa00;">▬ Avg</span>
       </div>
     `;
@@ -660,7 +666,7 @@ export class AdaptiveHeuristicsUI {
 
     // Footer
     const footer = document.createElement('div');
-    footer.style.cssText = 'margin-top: 15px; font-size: 9px; color: #666; border-top: 1px solid #333; padding-top: 8px;';
+    footer.style.cssText = 'margin-top: 15px; font-size: 12px; color: #666; border-top: 1px solid #333; padding-top: 8px;';
     footer.innerHTML = 'Press [Y] to toggle • Learns in real-time during play';
     this.panel.appendChild(footer);
 
