@@ -9,6 +9,42 @@ const CHANNEL_COLORS = [
   [255, 159, 64],   // orange
 ];
 
+// ========================================================================
+// Signal Field Interpretation by Agents
+// ========================================================================
+// While the SignalField object manages the state and rendering of signals,
+// the interpretation and use of these signals are handled by the agents
+// themselves (in `src/core/bundle.js`). Here's a summary of the process:
+//
+// 1. Sampling: At the start of its update cycle, an agent calls
+//    `captureSignalContext()`. This function samples the signal field at the
+//    agent's current location for each channel.
+//
+// 2. Gradient Computation: For each channel, the agent also computes a
+//    gradient by sampling the field at four nearby points (up, down, left,
+//    right). This gradient provides a direction vector pointing towards the
+//    strongest signal source, which is crucial for steering behaviors.
+//
+// 3. Interpretation Bias: The agent maintains an "interpretation bias" for
+//    each signal channel. This bias is a smoothed, decaying memory of recent
+//    signal strengths and gradients. It allows the agent's response to be
+//    influenced by its recent experiences, rather than just the instantaneous
+//    signal value. For example, a high "resource" signal gradient when the
+//    agent is hungry will increase its bias towards seeking resources.
+//
+// 4. Steering Behavior: The agent's AI (`computeAIDirection()`) uses the
+//    sampled signal amplitudes and the interpretation biases to modify its
+//    steering. For example:
+//    - A "resource" signal might pull the agent towards the gradient.
+//    - A "distress" signal might increase the agent's random exploration noise.
+//    - A "bond" signal might dampen other behaviors to encourage cohesion.
+//
+// 5. Signal Emission: Agents can also deposit signals back into the field
+//    using `emitSignal()`, which calls `SignalField.deposit()`. This allows
+//    for communication between agents (e.g., signaling a resource find or
+//    distress).
+// ========================================================================
+
 const clamp01 = (value) => Math.max(0, Math.min(1, value));
 
 const resolveChannelIndex = (channel, count) => {
@@ -153,6 +189,20 @@ export const SignalField = {
     if (!this.snapshot.length) return;
     for (let c = 0; c < this.channelCount; c++) {
       this.snapshot[c].set(this.buffers[c]);
+    }
+  },
+
+  applySnapshot(snapshot) {
+    if (!snapshot || !Array.isArray(snapshot.snapshots)) return;
+    try {
+      for (let c = 0; c < snapshot.snapshots.length; c++) {
+        const arr = snapshot.snapshots[c];
+        if (!arr || !this.buffers[c]) continue;
+        this.buffers[c].set(new Float32Array(arr));
+        if (this.snapshot && this.snapshot[c]) this.snapshot[c].set(this.buffers[c]);
+      }
+    } catch (err) {
+      console.warn('Failed to apply signalField snapshot:', err);
     }
   },
 

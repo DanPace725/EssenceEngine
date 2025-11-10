@@ -164,6 +164,8 @@ export function initializeEngine(canvas) {
         window.SignalField = SignalField;
         window.FertilityField = FertilityField;
         window.CONFIG = CONFIG;
+        window.TcRandom = TcRandom;
+        window.TcStorage = TcStorage;
         window.pixiApp = pixiApp;
     }
 

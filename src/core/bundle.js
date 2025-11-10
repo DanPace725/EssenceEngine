@@ -162,22 +162,31 @@ export function createBundleClass(context) {
       const totalSegments = this.points.length - 1;
       const speedBoost = clamp((this.currentSpeed || 0) / CONFIG.moveSpeedPxPerSec, 0, 1);
 
-      // Use Catmull-Rom spline for smoother curves
+      // The trail is rendered as a series of connected quadratic Bézier curves,
+      // which gives it a smooth, flowing appearance. The control points for these
+      // curves are calculated in a way that is inspired by Catmull-Rom splines,
+      // ensuring that the trail passes through each recorded point smoothly.
       for (let i = 0; i < totalSegments; i++) {
         const start = this.points[i];
         const end = this.points[i + 1];
+
+        // `t` represents the segment's position along the trail (0=tail, 1=head).
         const t = i / totalSegments;
         const aliveFactor = start.alive ? 1 : 0.5;
         
-        // Smoother width taper with exponential curve
+        // --- Visual Properties ---
+        // The trail's width and opacity taper off towards the tail. This is achieved
+        // using an exponential curve (`Math.pow`) to create a more natural fade-out.
         const widthTaper = Math.pow(1 - t, 1.2);
         const width = this.baseWidth * widthTaper * aliveFactor;
         
-        // Smoother alpha fade
         const alphaFade = Math.pow(1 - t, 0.7);
         const alpha = clamp(alphaFade * 0.7 + speedBoost * 0.2, 0.1, 0.8);
         
+        // The color also fades towards a shadow color at the tail.
         const color = lerpColor(shadowColor, baseColor, Math.pow(1 - t, 0.6));
+
+        // A secondary "glow" graphic is drawn underneath for a softer look.
         const glowAlpha = clamp(alphaFade * 0.3 + speedBoost * 0.25, 0.05, 0.5);
         const glowWidth = Math.max(width * 2.0, this.baseWidth * 0.8);
 
@@ -199,15 +208,21 @@ export function createBundleClass(context) {
           join: this.roundJoin
         });
 
-        // Better curve control point for smoother bends
-        // Use look-ahead for better anticipation of curves
+        // --- Curve Calculation ---
+        // To create a smooth curve, we need a control point for the quadratic Bézier.
+        // This control point is calculated based on the previous point (`prev`), the
+        // current point (`start`), and the next point (`end`). This look-ahead/behind
+        // approach is what makes the curve smooth and continuous.
         const prev = i > 0 ? this.points[i - 1] : start;
         
-        // Catmull-Rom inspired control point
+        // The control point's position is offset from the start point in the direction
+        // of the vector from `prev` to `end`. This creates a smooth transition.
+        // The `tension` parameter controls how "curvy" the trail is.
         const tension = 0.5;
         const controlX = start.x + (end.x - prev.x) * tension * 0.5;
         const controlY = start.y + (end.y - prev.y) * tension * 0.5;
 
+        // Draw the curve segment for both the glow and the main trail graphic.
         if (this.glowGraphics && glowAlpha > 0.02) {
           this.glowGraphics.moveTo(start.x, start.y);
           this.glowGraphics.quadraticCurveTo(controlX, controlY, end.x, end.y);

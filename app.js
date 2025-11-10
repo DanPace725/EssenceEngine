@@ -755,34 +755,61 @@ let trainingModule = null;
       step(dt) {
         if (!this.buf) return;
   
-        // Evaporation (exponential-ish)
+        // Evaporation: Simulates the fading of the trail over time.
+        // This is a simple exponential decay model where a fraction of the trail's
+        // strength is removed each frame. The rate is controlled by `evapPerSec`.
+        // The formula is `v' = v - k*v`, which is a forward Euler approximation
+        // of the differential equation `dV/dt = -k*V`.
         const k = CONFIG.evapPerSec * dt;
         for (let i = 0; i < this.buf.length; i++) {
           const v = this.buf[i];
           this.buf[i] = v > 0 ? Math.max(0, v - k * v) : 0;
         }
   
-        // Diffusion (cross kernel)
+        // Diffusion: Simulates the spreading of the trail scent.
+        // This process uses a simplified 5-point stencil (a cross shape) to
+        // approximate the heat equation. Each cell's value moves towards the
+        // average of its four cardinal neighbors.
         if (CONFIG.enableDiffusion) {
           const a = CONFIG.diffusePerSec * dt;
           if (a > 0) {
             const w = this.w, h = this.h, src = this.buf, dst = this.tmp;
+
+            // We use a temporary buffer (`dst`) to store the new values.
+            // This is critical to ensure that the calculation for each cell is based
+            // on the state of its neighbors from the *previous* time step, preventing
+            // numerical instability and ensuring the diffusion is calculated correctly.
             for (let y = 0; y < h; y++) {
+              // Clamp coordinates at the edges to prevent reading out of bounds.
+              // This is a simple "zero-flux" boundary condition where the trail
+              // does not diffuse beyond the edge of the grid.
               const yUp = (y > 0) ? y-1 : y;
               const yDn = (y < h-1) ? y+1 : y;
               for (let x = 0; x < w; x++) {
                 const xLt = (x > 0) ? x-1 : x;
                 const xRt = (x < w-1) ? x+1 : x;
-                const iC = y*w + x;
-                const vC = src[iC];
+
+                const iC = y*w + x; // Current cell index
+                const vC = src[iC]; // Current cell value
+
+                // Get values of the four neighbors
                 const vUp = src[yUp*w + x];
                 const vDn = src[yDn*w + x];
                 const vLt = src[y*w + xLt];
                 const vRt = src[y*w + xRt];
+
+                // Calculate the average of the neighbors. This represents the
+                // equilibrium point that the current cell's value is moving towards.
                 const mean = (vUp + vDn + vLt + vRt) * 0.25;
+
+                // The new value is the current value plus a fraction `a` of the
+                // difference between the neighbor average and the current value.
+                // This is a discrete approximation of the diffusion process.
                 dst[iC] = clamp(vC + a * (mean - vC), 0, 1);
               }
             }
+            // Swap the buffers for the next frame. The temporary buffer now holds
+            // the new state, and the old buffer can be reused as the temporary one.
             const t = this.buf; this.buf = this.tmp; this.tmp = t;
           }
         }

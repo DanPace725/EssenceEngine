@@ -4,6 +4,7 @@ import { MetricsTracker } from './metricsTracker.js';
 import { ConfigOptimizer, ConfigTrainingManager, TUNABLE_PARAMS } from './configOptimizer.js';
 import { AdaptiveHeuristics } from './adaptiveHeuristics.js';
 import { buildObservation } from '../../observations.js';
+import { buildStateSnapshot, applyStateSnapshot } from './stateIO.js';
 
 export function createTrainingModule({
   world,
@@ -789,6 +790,52 @@ export function createTrainingModule({
         console.error('Failed to export metrics:', err);
         alert('Failed to export metrics. Check console for details.');
       }
+    });
+
+    ui.on('onExportState', () => {
+      try {
+        const snap = buildStateSnapshot({ world, trail, signalField, config });
+        const json = JSON.stringify(snap, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const link = documentHandle.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        link.download = `essence-state-${timestamp}.json`;
+        link.click();
+        URL.revokeObjectURL(link.href);
+        console.log(`✅ Simulation state exported: ${link.download}`);
+      } catch (err) {
+        console.error('Failed to export simulation state:', err);
+        alert('Failed to export simulation state. See console for details.');
+      }
+    });
+
+    ui.on('onLoadState', () => {
+      const input = documentHandle.createElement('input');
+      input.type = 'file';
+      input.accept = '.json';
+      input.onchange = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          try {
+            const data = JSON.parse(ev.target.result);
+            const ok = applyStateSnapshot(data, { world, trail, signalField, config });
+            if (ok) {
+              console.log('✅ Simulation state loaded from', file.name);
+              alert(`Simulation state loaded: ${file.name}`);
+            } else {
+              alert('Failed to apply simulation state');
+            }
+          } catch (err) {
+            console.error('Failed to load simulation state:', err);
+            alert('Failed to load simulation state. See console for details.');
+          }
+        };
+        reader.readAsText(file);
+      };
+      input.click();
     });
     
     // Baseline collection handlers

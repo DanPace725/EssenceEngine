@@ -106,6 +106,26 @@ export class TrailSystem {
         }
     }
 
+    applySnapshot(snapshot) {
+        if (!snapshot) return;
+        if (Array.isArray(snapshot.snapshot) && this.buf && this.snapshot) {
+            try {
+                this.buf.set(new Float32Array(snapshot.snapshot));
+                this.captureSnapshot();
+            } catch (err) {
+                console.warn('Failed to apply trail snapshot:', err);
+            }
+        }
+        if (Array.isArray(snapshot.authorSnapshot) && this.authorBuf) {
+            try { this.authorBuf.set(new Uint32Array(snapshot.authorSnapshot)); this.authorSnapshot.set(this.authorBuf); }
+            catch (err) { console.warn('Failed to apply trail author snapshot:', err); }
+        }
+        if (Array.isArray(snapshot.timestampSnapshot) && this.timestampBuf) {
+            try { this.timestampBuf.set(new Uint32Array(snapshot.timestampSnapshot)); this.timestampSnapshot.set(this.timestampBuf); }
+            catch (err) { console.warn('Failed to apply trail timestamp snapshot:', err); }
+        }
+    }
+
     step(dt) {
         if (!this.buf) return;
 

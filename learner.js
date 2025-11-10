@@ -55,10 +55,23 @@ export class CEMLearner {
   sampleWeights() {
     const weights = [];
     for (let i = 0; i < this.weightDims; i++) {
-      // Box-Muller transform for Gaussian sampling
+      // The Box-Muller transform is a method for generating pairs of independent,
+      // standard normal (Gaussian) random variables from a uniform distribution.
+      // See: https://en.wikipedia.org/wiki/Box-Muller_transform
+      //
+      // Here, we generate one standard normal deviate `z` per loop iteration.
+      // Although the transform generates two (the other using sin), we only need one
+      // per weight dimension, so we discard the second one for simplicity.
+
+      // u1 and u2 are two independent random variables uniformly distributed in (0, 1].
       const u1 = Math.random();
       const u2 = Math.random();
+
+      // The transform formula for one of the standard normal deviates.
       const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+
+      // Scale and shift the standard normal `z` to fit our distribution's
+      // mean (mu) and standard deviation (sigma) for the current weight dimension.
       weights.push(this.mu[i] + this.sigma[i] * z);
     }
     return weights;

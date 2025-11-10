@@ -99,6 +99,10 @@ export class TrainingUI {
       <div style="margin-top: 10px; border-top: 1px solid #333; padding-top: 10px;">
         <div style="font-size: 10px; color: #888; margin-bottom: 5px;">Training Metrics Export:</div>
         <button id="export-metrics" style="margin: 5px 0;">📊 Export Training Metrics</button>
+        <div style="margin-top:8px;">
+          <button id="export-state" style="margin: 5px 0;">📁 Export Simulation State</button>
+          <button id="import-state" style="margin: 5px 0;">📂 Import Simulation State</button>
+        </div>
       </div>
     `;
     this.panel.appendChild(policySection);
@@ -254,6 +258,18 @@ export class TrainingUI {
     document.getElementById('export-metrics')?.addEventListener('click', () => {
       if (this.callbacks.onExportMetrics) {
         this.callbacks.onExportMetrics();
+      }
+    });
+
+    document.getElementById('export-state')?.addEventListener('click', () => {
+      if (this.callbacks.onExportState) {
+        this.callbacks.onExportState();
+      }
+    });
+
+    document.getElementById('import-state')?.addEventListener('click', () => {
+      if (this.callbacks.onLoadState) {
+        this.callbacks.onLoadState();
       }
     });
     
