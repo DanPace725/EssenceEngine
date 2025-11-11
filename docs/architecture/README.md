@@ -30,6 +30,7 @@ These documents focus on:
 - [Reward System Implementation Plan](REWARD_SYSTEM_IMPLEMENTATION_PLAN.md) - Implementation plan
 - [Reward Decision Tree](REWARD_DECISION_TREE.md) - Technical troubleshooting
 - [State Export/Import System](STATE_EXPORT_IMPORT.md) - State snapshot system
+- [Genome Agent State Inventory](GENOME_AGENT_STATE_INVENTORY.md) - Genome-visible bundle contract
 
 ## Analysis Tools
 
