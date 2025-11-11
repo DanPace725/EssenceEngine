@@ -20,6 +20,17 @@ description: "User guide for training the Essence Engine with reinforcement lear
 
 # 🎓 Training System User Guide
 
+## Code Reference
+
+**Primary Files:**
+- `trainingUI.js` - Training UI panel and controls
+- `learner.js` - CEMLearner & TrainingManager (CEM algorithm)
+- `src/core/training.js` - Training orchestration and episode management
+
+**Configuration:** `config.js` → `CONFIG.learning`
+
+---
+
 ## 🎉 Training is Now Fully Integrated!
 
 Your Essence Engine simulation now has a complete reinforcement learning system built in.

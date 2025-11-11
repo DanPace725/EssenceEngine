@@ -11,6 +11,20 @@ description: "Essence Engine documentation"
 
 # Scent Gradient Reward System
 
+## Code Reference
+
+**Primary Implementation File:** [`scentGradient.js`](../../scentGradient.js)
+
+**Configuration:** `config.js` → `CONFIG.scentGradient`
+
+**Main Functions:**
+- `calculateScentIntensity()` - Compute scent at any point
+- `getScentGradient()` - Get direction and intensity
+- `getFoodDensitySensing()` - Multi-scale sensing
+- `visualizeScentGradient()` / `visualizeScentHeatmap()` - Debug visualization
+
+---
+
 ## Overview
 
 This guide explains the new **scent gradient reward system** that helps AI agents learn to find food resources more effectively. The system provides three complementary mechanisms for gradient-based navigation:

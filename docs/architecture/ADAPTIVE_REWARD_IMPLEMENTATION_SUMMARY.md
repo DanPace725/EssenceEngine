@@ -11,6 +11,26 @@ description: "Essence Engine documentation"
 
 # ✅ Adaptive Reward System - Implementation Complete
 
+## Code Reference
+
+**Primary Implementation File:** [`rewards.js`](../../rewards.js)
+
+**Key Functions & Classes:**
+- `calculateAdaptiveReward(avgFindTime, config)` - Compute reward based on search difficulty
+- `updateFindTimeEMA(world)` - Update exponential moving average of find times
+- `RewardTracker` class - Monitors episode rewards and individual components
+- `EpisodeManager` class - Manages episode lifecycle and statistics
+
+**Configuration:** `config.js` → `CONFIG.adaptiveReward`
+
+**Related Files:**
+- `src/core/training.js` - Training orchestration that uses rewards
+- `learner.js` - CEMLearner uses rewards for policy evaluation
+- `app.js` - Integrates reward system into main loop
+- `trainingUI.js` - Displays reward statistics in training panel
+
+---
+
 ## What Was Implemented
 
 Successfully implemented a biologically-grounded adaptive reward system that scales with search difficulty. The system is **fully functional** and ready for testing.

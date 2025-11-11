@@ -11,6 +11,25 @@ description: "Essence Engine documentation"
 
 # Scent Gradient Implementation Summary
 
+## Code Reference
+
+**Primary Implementation File:** [`scentGradient.js`](../../scentGradient.js)
+
+**Key Functions:**
+- `calculateScentIntensity(distance, config)` - Compute scent intensity at a point
+- `getScentGradient(x, y, resources)` - Get gradient vector and intensity
+- `getFoodDensitySensing(x, y, resources)` - Multi-scale density sensing
+- `visualizeScentGradient(ctx, resources, gridSize)` - Debug visualization
+- `visualizeScentHeatmap(ctx, resources, cellSize)` - Heatmap visualization
+
+**Related Files:**
+- `config.js` - Scent gradient configuration (`CONFIG.scentGradient`)
+- `observations.js` - Scent observations added to observation vector
+- `rewards.js` - Gradient climbing reward component
+- `app.js` - Integration and rendering
+
+---
+
 ## ✅ What Was Implemented
 
 I've successfully implemented a comprehensive **scent gradient reward system** for your Essence Engine simulation. Here's what's been added:

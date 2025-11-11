@@ -11,6 +11,17 @@ description: "Essence Engine documentation"
 
 # 📊 Policy Analyzer Guide
 
+## Code Reference
+
+**Implementation Files:**
+- `policyAnalyzer.js` - Single/dual policy analysis (CLI tool)
+- `policyBatchAnalyzer.js` - Batch comparison and export
+- `learner.js` - CEMLearner (stores policy weights and history)
+
+**Usage:** Run as Node.js scripts from command line.
+
+---
+
 ## What It Does
 
 The Policy Analyzer helps you understand what your trained policies have learned by:

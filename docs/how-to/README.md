@@ -31,20 +31,20 @@ These guides are written from the operator/user perspective and focus on:
 ## Available Guides
 
 ### Training & Learning
-- [Training Guide](TRAINING_GUIDE.md) - Complete guide to the training system
+- [Training Guide](TRAINING_GUIDE.md) - Complete guide to the training system (`trainingUI.js`, `learner.js`)
 - [Multi-Agent Guide](MULTI_AGENT_GUIDE.md) - Multi-agent learning features
 - [Policy Training Tips](POLICY_TRAINING_TIPS.md) - Tips for effective training
-- [Policy Analyzer Guide](POLICY_ANALYZER_GUIDE.md) - Using the policy analyzer tool
-- [Batch Analyzer Guide](BATCH_ANALYZER_GUIDE.md) - Comparing multiple policies
+- [Policy Analyzer Guide](POLICY_ANALYZER_GUIDE.md) - Using the policy analyzer tool (`policyAnalyzer.js`)
+- [Batch Analyzer Guide](BATCH_ANALYZER_GUIDE.md) - Comparing multiple policies (`policyBatchAnalyzer.js`)
 
 ### Features & Systems
-- [Participation Guide](PARTICIPATION_GUIDE.md) - Interactive agent guidance with mouse/pointer input
-- [Scent Gradient Guide](SCENT_GRADIENT_GUIDE.md) - Using scent gradients for navigation
-- [Plant Ecology Guide](PLANT_ECOLOGY_GUIDE.md) - Understanding the plant ecology system
+- [Participation Guide](PARTICIPATION_GUIDE.md) - Interactive agent guidance with mouse/pointer input (`app/interactions.js`)
+- [Scent Gradient Guide](SCENT_GRADIENT_GUIDE.md) - Using scent gradients for navigation (`scentGradient.js`)
+- [Plant Ecology Guide](PLANT_ECOLOGY_GUIDE.md) - Understanding the plant ecology system (`plantEcology.js`)
 - [Resource Ecology Guide](RESOURCE_ECOLOGY_GUIDE.md) - Resource management mechanics
 - [Hunger System Guide](HUNGER_SYSTEM_GUIDE.md) - Hunger and metabolism mechanics
 - [Own Trail Penalty Guide](OWN_TRAIL_PENALTY_GUIDE.md) - Trail penalty system
-- [Visual Indicators](VISUAL_INDICATORS.md) - Understanding UI elements
+- [Visual Indicators](VISUAL_INDICATORS.md) - Understanding UI elements (`app/hud.js`)
 
 ### Development & Testing
 - [Debug Mode Guide](DEBUG_MODE_GUIDE.md) - **Isolated feature testing with debug profiles**

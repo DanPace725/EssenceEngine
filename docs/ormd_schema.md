@@ -284,5 +284,26 @@ description: "Brief description"
 Your content goes here.
 ```
 
+## ORMD Schema
+
+This document outlines the schema for structuring ORMD files used in the Essence Engine. It provides a detailed description of the fields, their types, and any constraints that apply.
+
+## Schema Structure
+- **Field Name**: Description of the field and its purpose.
+- **Type**: Data type of the field (e.g., string, integer, boolean).
+- **Constraints**: Any constraints that apply to the field (e.g., required, unique).
+
+## Example
+```json
+{
+  "fieldName": "value",
+  "anotherField": 123
+}
+```
+
+## Notes
+- Ensure that all ORMD files adhere to this schema for compatibility with the Essence Engine.
+- Update this document as new fields or changes are introduced to the schema.
+
 ## Additional Resources
 https://github.com/DanPace725/ormd
