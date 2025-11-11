@@ -108,23 +108,25 @@ let trainingModule = null;
       const configPanel = document.getElementById("config-panel");
       const panelOpen = configPanel && configPanel.style.display !== "none";
       const panelWidth = panelOpen ? 360 : 0; // Config panel width
-      // Canvas now fills full viewport, HUD/Dashboard are drawn on top
-      
+
       // Use stable dimension calculation for high-DPI displays
       // Prefer clientWidth/Height as they're more reliable on scaled displays
       const dprCheck = window.devicePixelRatio || 1;
-      const width = dprCheck > 1 
-        ? (document.documentElement.clientWidth || window.innerWidth) 
+      const width = dprCheck > 1
+        ? (document.documentElement.clientWidth || window.innerWidth)
         : window.innerWidth;
-      const height = dprCheck > 1 
-        ? (document.documentElement.clientHeight || window.innerHeight) 
+      const height = dprCheck > 1
+        ? (document.documentElement.clientHeight || window.innerHeight)
         : window.innerHeight;
+
+      const headerHeight = 40; // Account for header height
+      const hotkeyStripHeight = 35; // Account for hotkey strip height
 
       return {
         width: width - panelWidth,
-        height: height,
+        height: height - headerHeight - hotkeyStripHeight,
         panelWidth: panelWidth,
-        topReserve: 0
+        topReserve: headerHeight
       };
     };
     

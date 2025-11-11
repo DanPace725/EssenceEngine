@@ -40,7 +40,7 @@ export function initializeCanvasManager({ canvas, ctx, getAvailableSize }) {
       canvas.style.width = `${canvasWidth}px`;
       canvas.style.height = `${canvasHeight}px`;
       canvas.style.position = 'fixed';
-      canvas.style.top = '0';
+      canvas.style.top = `${size?.topReserve || 0}px`;
       canvas.style.left = '0';
     }
 
