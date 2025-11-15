@@ -1402,9 +1402,13 @@ let trainingModule = null;
             color: "#ff9cf0",
             lines: [
               `🧫 MITOSIS`,
-              `   P: ${(mitosisStats.probability * 100).toFixed(0)}%  thr:${mitosisStats.threshold}`,
-              `   cap:${s.capacity.toFixed(2)} strain:${s.strain.toFixed(2)}`,
-              `   press:${s.pressure.toFixed(2)} opp:${s.opportunity.toFixed(2)} harm:${s.harmony.toFixed(2)}`
+              `   probability: ${(mitosisStats.probability * 100).toFixed(0)}%`,
+              `   threshold: ${mitosisStats.threshold}`,
+              `   capacity: ${s.capacity.toFixed(2)}`,
+              `   strain: ${s.strain.toFixed(2)}`,
+              `   pressure: ${s.pressure.toFixed(2)}`,
+              `   opportunity: ${s.opportunity.toFixed(2)}`,
+              `   harmony: ${s.harmony.toFixed(2)}`
             ]
           });
         }
